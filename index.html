@@ -718,7 +718,7 @@ function runLeg(L){const {r,f,t,g,dep,arr,dir}=L;if(!S.fleet.includes(f)||!S.rou
   const k=mxRisk(f,t);
   if(k.ground){log(f.reg+' '+nm+' cancelled: grounded, overdue maintenance');rs.canc++;S.stat.canc++;return}
   if(k.over&&rng(hs(L.id+'x'))()<.002+.014*Math.min(1,k.x)**2)return crash(f,r,t,nm,arr);
-  const rand=rng(hs(L.id))();const e=econ(r,f,t,dir,rand,dep);try{bkApply(r,e,dep)}catch(x){}
+  const rand=rng(hs(L.id))();const e=econ(r,f,t,dir,rand,dep);try{bkApply(r,e,dep);ffApply(r,e,L.id,dep)}catch(x){}
   {let cw={};try{cw=crCheck(r,f,t,g.b,L.id,e)}catch(x){}if(cw.cancel){log(f.reg+' '+nm+' cancelled: crew shortage');rs.canc++;S.stat.canc++;return}if(cw.extra)e.cost+=cw.extra}
   let wd=0;try{const wo=wxOps(dir?r.o:r.d,t,arr,L.id,e.pax);if(wo){const fp=fuelMul(arr),dst=dir?r.o:r.d;let ex=t[7]*(wo.hold/60)*fp;wd=wo.hold;if(wo.div){const bm=(wo.div.km*1.1/t[8])*60+25;ex+=t[7]*(bm/60)*fp+t[5]*.9*10+e.pax*65;wd+=Math.round(60+bm);e.rev*=.9;rs.div=(rs.div||0)+1;S.stat.div=(S.stat.div||0)+1;log(f.reg+' '+nm+' diverted to '+wo.div.code+' ('+(AP[wo.div.code]?AP[wo.div.code].city:'')+'): weather at '+dst+'. Extra cost '+usd(ex));try{newsAdd('wx',f.reg+' diverts to '+wo.div.code+' as weather closes in on '+dst,['One of your flights, '+f.reg+' ('+nm+'), could not land at '+(AP[dst]?AP[dst].city:dst)+' because of '+(WX.ap[dst]&&WX.ap[dst].tx?WX.ap[dst].tx.toLowerCase():'severe weather')+' and diverted to '+wo.div.code+'.','Passengers were looked after and rebooked. The extra fuel, landing fees and passenger care cost about '+usd(ex)+'.'],'The aircraft is out of position, so its next departure is likely to be late.')}catch(x){}}else if(wo.hold>=20)log(f.reg+' '+nm+' held '+wo.hold+' min before landing at '+dst+' (weather)');e.cost+=ex}}catch(x){}
   try{const dh0=dir?r.d:r.o;if(S.hubs&&S.hubs.includes(dh0)&&gnStrikeAt(dh0,dep)&&rng(hs('sk'+r.id+dep))()<.4){const c=(f.seats||150)*.7*65/1e6;LG('Passenger care and refunds').cash-=c;S.repPen=Math.min(.12,(S.repPen||0)+.004);log(f.reg+' '+nm+' cancelled: ground staff strike at '+dh0+'. Passenger care '+money(c));rs.canc++;S.stat.canc++;return}}catch(x){}
@@ -764,6 +764,7 @@ function tick(){const n=now();let ch=false,lp=0;const lg=[];
   try{if(msTick(n))ch=true}catch(e){}
   try{if(lvTick(n))ch=true}catch(e){}
   try{if(bkTick(n))ch=true}catch(e){}
+  try{if(ffAuto(n))ch=true}catch(e){}
   if(invTick(n))ch=true;
   if(NETOK&&S.hubs&&aiTick(n))ch=true;
   if(NETOK&&S.hubs&&aiDlv(n))ch=true;
@@ -2693,15 +2694,49 @@ function bkFlights(r,f,t,g,n,hz){const out=[];for(let d=dayIdx(n)-1;d<=dayIdx(n+
   if(arr>n&&dep<=n+hz&&dep>=r.created&&!(S.early&&S.early[id]))out.push({dep,arr,dir,id})}return out}
 function bkShare(r,dep,n){if(n>=dep)return 1;const w0=Math.max(r.created||0,dep-BKW);if(n<=w0)return 0;return bkB((n-w0)/(dep-w0))}
 function bkAdv(n){let A=0;S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const ex=bkExp(r,f,t,n);
-  bkFlights(r,f,t,g,n,BKW).forEach(L=>{A+=ex.rev*bkSf(r,L.dep)*bkShare(r,L.dep,n)})});return A}
+  bkFlights(r,f,t,g,n,BKW).forEach(L=>{A+=ex.rev*bkSf(r,L.dep)*bkShare(r,L.dep,n)*ffFac(L.id)})});return A}
 function bkTick(n){if(!S.routes||!S.routes.length){S.advA=0;return false}if(S.bkT&&n-S.bkT<30000)return false;S.bkT=n;const A=bkAdv(n);
   if(S.advA==null){S.advA=A;return false}const d=A-S.advA;S.advA=A;if(Math.abs(d)<1)return false;LG('Advance ticket sales').cash+=d/1e6;return true}
 function bkOvCard(){try{if(!S.routes||!S.routes.length)return'';const n=now();let rows='';
   S.routes.slice(0,12).forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const ex=bkExp(r,f,t,n);
     const L=bkFlights(r,f,t,g,n,BKW*1.2).filter(x=>x.dep>n).sort((a,b)=>a.dep-b.dep)[0];if(!L)return;
     const sf=bkSf(r,L.dep),sh=bkShare(r,L.dep,n),bk=Math.round(ex.seats*Math.min(1,ex.pax/Math.max(1,ex.seats))*sf*sh),pc=ex.seats?Math.round(100*bk/ex.seats):0;
-    rows+='<div class="row" style="margin-top:6px"><span>'+(L.dir?r.d+' → '+r.o:r.o+' → '+r.d)+' <span class="mut">'+hhmm(L.dep)+' UTC · in '+fmtD(L.dep-n)+'</span></span><span><b>'+bk+' / '+Math.round(ex.seats)+'</b> <span class="mut">'+pc+'%</span></span></div>'+'<div style="height:4px;border-radius:2px;background:var(--line);margin-top:3px"><div style="height:4px;border-radius:2px;width:'+Math.min(100,pc)+'%;background:var(--teal)"></div></div>'});
+    rows+='<div class="row" style="margin-top:6px"><span>'+(L.dir?r.d+' → '+r.o:r.o+' → '+r.d)+' <span class="mut">'+hhmm(L.dep)+' UTC · in '+fmtD(L.dep-n)+'</span></span><span><b>'+bk+' / '+Math.round(ex.seats)+'</b> <span class="mut">'+pc+'%</span></span></div>'+'<div style="height:4px;border-radius:2px;background:var(--line);margin-top:3px"><div style="height:4px;border-radius:2px;width:'+Math.min(100,pc)+'%;background:var(--teal)"></div></div><button data-ffo="'+r.id+'" style="margin-top:6px;width:100%">'+(FFO[r.id]?'Hide pricing ▴':'Flight pricing'+((r.sp|0)?' · smart '+FFN[r.sp|0].toLowerCase():'')+' ▾')+'</button>'+(FFO[r.id]?ffCard(r,f,t,g,n):'')});
   return'<div class="card"><div class="row"><b>Advance bookings</b><span class="mut">next 24 h</span></div><div class="mut">Tickets are paid for as seats sell: '+usd(S.advA||0)+' already received for flights that have not landed. New routes start with fewer seats sold and fill over their first 24 hours.</div>'+rows+'</div>'}catch(e){return''}}
+
+/* ---------- per-flight fares and smart pricing ---------- */
+const FFK=1.0,FFL=[[.9,1.15],[.85,1.35],[.7,1.6]],FFN=['Off','Conservative','Standard','Aggressive'],FFFEE=.02;
+const ffSeg=id=>(S.ff&&S.ff[id]&&S.ff[id].s)||null;
+const ffCur=id=>{const s=ffSeg(id);return s?s[s.length-1][1]:1};
+function ffCalc(segs,Db,seats,paxb,rev){let Ds=0,Rs=0;segs.forEach((s,i)=>{const w=(i<segs.length-1?segs[i+1][0]:1)-s[0],m=s[1],d=Db*Math.exp(-FFK*(m-1));Ds+=w*d;Rs+=w*m*d});
+  const c=Ds>seats&&Ds>0?seats/Ds:1;return{pax:Ds*c,rev:paxb>0?rev/paxb*Rs*c:rev}}
+function ffDb(r,id,dep,sf){const pd=pairDemand(r);if(!pd)return 0;return pd.perFlight*seas(r,dep)*(0.92+0.16*rng(hs(id))())*(1-(S.repPen||0))*(sf==null?bkSf(r,dep):sf)}
+function ffApply(r,e,id,dep,segs){const sg=segs||ffSeg(id);if(!sg||!e.seats||!e.pax)return e;const Db=ffDb(r,id,dep,e.bk);if(!Db)return e;
+  const o=ffCalc(sg,Db,e.seats,e.pax,e.rev),kp=o.pax/e.pax;e.rev=o.rev;if(e.cb)e.cost+=(e.cb.pxs+e.cb.cat)*(kp-1);e.pax=Math.round(o.pax);e.ff=1;
+  if(!segs&&S.ff[id].a)e.cost+=e.rev*FFFEE;return e}
+function ffSet(r,id,dep,m,auto){S.ff=S.ff||{};const E=S.ff[id]||(S.ff[id]={s:[[0,1]],a:0});const ts=bkShare(r,dep,now()),L=E.s[E.s.length-1];
+  if(L[0]>=ts-1e-6)L[1]=m;else E.s.push([ts,m]);E.t=now();E.dp=dep;if(auto)E.a=1;else{E.a=0;E.lock=1}}
+function ffProj(r,f,t,L,m){const e=econ(r,f,t,L.dir,rng(hs(L.id))(),L.dep);bkApply(r,e,L.dep);const E=S.ff&&S.ff[L.id],s=E?E.s.map(x=>x.slice()):[[0,1]],ts=bkShare(r,L.dep,now()),la=s[s.length-1];
+  if(la[0]>=ts-1e-6)la[1]=m;else s.push([ts,m]);ffApply(r,e,L.id,L.dep,s);return e}
+function ffFac(id){const s=ffSeg(id);if(!s)return 1;let a=0;s.forEach((x,i)=>{const w=(i<s.length-1?s[i+1][0]:1)-x[0];a+=w*x[1]*Math.exp(-FFK*(x[1]-1))});return a}
+function ffAuto(n){if(S.spT&&n-S.spT<10*60000)return false;S.spT=n;let ch=false;
+  S.routes.forEach(r=>{const lv=r.sp|0;if(!lv)return;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const lim=FFL[lv-1],seats=f.seats||t[3];
+    bkFlights(r,f,t,g,n,BKW).forEach(L=>{if(L.dep<n+20*60000)return;const E=S.ff&&S.ff[L.id];if(E&&E.lock)return;const Db=ffDb(r,L.id,L.dep);if(!Db)return;
+      let tg=Db>seats?1+Math.log(Db/seats)/FFK:1;tg=Math.round(Math.max(lim[0],Math.min(lim[1],tg))*20)/20;const cur=ffCur(L.id);if(Math.abs(tg-cur)>=.05){ffSet(r,L.id,L.dep,tg,1);ch=true}})});
+  if(S.ff){const d0=dayIdx(n)-3;for(const k in S.ff){const d=+k.split(':')[1];if(d<d0)delete S.ff[k]}}return ch}
+const FFO={};
+function ffCard(r,f,t,g,n){const fl=bkFlights(r,f,t,g,n,BKW*1.2).filter(x=>x.dep>n).sort((a,b)=>a.dep-b.dep).slice(0,6),lv=r.sp|0;
+  let h='<div style="margin-top:6px"><div class="mut" style="font-size:12px">Smart pricing (revenue-management fee 2% of ticket revenue on flights it prices)</div><div class="row" style="gap:4px;margin:4px 0;flex-wrap:wrap;justify-content:flex-start">'+FFN.map((x,i)=>'<button data-spr="'+r.id+'|'+i+'"'+(i===lv?' class="pri"':'')+' style="padding:5px 8px">'+x+'</button>').join('')+'</div>'
+   +'<div class="mut" style="font-size:12px">Fares are fixed at sale: a change only affects seats not yet sold. Smart pricing raises the fare on flights that would sell out and returns it to normal on others.</div>';
+  fl.forEach(L=>{const m=ffCur(L.id),e=ffProj(r,f,t,L,m),b=ffProj(r,f,t,L,1),sh=bkShare(r,L.dep,n),bk=Math.round(e.pax*sh),E=S.ff&&S.ff[L.id],dv=e.rev-b.rev;
+    h+='<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line)"><div class="row"><span>'+(L.dir?r.d+' → '+r.o:r.o+' → '+r.d)+' <span class="mut">'+hhmm(L.dep)+' UTC</span></span><span><b>'+usd(Math.round(r.fare*m))+'</b> <span class="mut">'+(m===1?'normal':(m>1?'+':'')+Math.round((m-1)*100)+'%')+(E&&E.a?' · auto':E&&E.lock?' · manual':'')+'</span></span></div>'
+     +'<div class="mut" style="font-size:12px">Booked '+bk+' / '+Math.round(e.seats)+' · expected load '+Math.round(100*e.pax/Math.max(1,e.seats))+'% · revenue '+usd(e.rev)+(Math.abs(dv)>=1?' ('+(dv>0?'+':'-')+usd(Math.abs(dv))+' vs normal)':'')+'</div>'
+     +'<div class="row" style="gap:4px;margin-top:4px;justify-content:flex-start">'+[[-10,'−10%'],[-5,'−5%'],[5,'+5%'],[10,'+10%']].map(x=>'<button data-ffm="'+L.id+'|'+x[0]+'|'+r.id+'|'+L.dep+'" style="padding:5px 9px">'+x[1]+'</button>').join('')+(m!==1?'<button data-ffm="'+L.id+'|0|'+r.id+'|'+L.dep+'" style="padding:5px 9px">Reset</button>':'')+'</div></div>'});
+  return h+'</div>'}
+document.addEventListener('click',e=>{let b=e.target.closest('[data-ffo]');if(b){FFO[b.dataset.ffo]=!FFO[b.dataset.ffo];render();return}
+  b=e.target.closest('[data-spr]');if(b){const [id,v]=b.dataset.spr.split('|'),r=S.routes.find(x=>x.id==id);if(r){r.sp=+v;S.spT=0;if(!+v&&S.ff){for(const k in S.ff){const E=S.ff[k];if(k.split(':')[0]==id&&E.a&&E.dp>now()){ffSet(r,k,E.dp,1,0);E.lock=0;E.a=0}}}
+      save();render()}return}
+  b=e.target.closest('[data-ffm]');if(b){const [id,d,rid,dep]=b.dataset.ffm.split('|'),r=S.routes.find(x=>x.id==rid);if(!r)return;const cur=ffCur(id),m=+d===0?1:Math.max(.5,Math.min(2,Math.round(cur*(1+d/100)*100)/100));ffSet(r,id,+dep,m,0);save();render()}});
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');if(ps_){S.pos=ps_.dataset.pos;save();render();return}
