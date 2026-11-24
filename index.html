@@ -2084,12 +2084,12 @@ const FAMS=[['LTP','Light turboprop','Caravan, Twin Otter, L-410',['C208','DHC6'
  ['A330','A330/A340','A330 and A340',['A332','A333','A338','A339','A343','A346'],2],['A350','A350','A350-900 and -1000',['A359','A35K'],2],['A380','A380','A380-800',['A388'],2],['B787','787','787-8, -9, -10',['B788','B789','B78X'],2],['B777','777','777-200ER/LR, -300, -300ER, -9',['B772','B773','B77L','B77W','B779'],2],['B747','747','747-400 and 747-8',['B744','B748'],2]],
  CRQ=[[.03,70],[.05,105],[.09,150]],FAMX={};
 FAMS.forEach(f=>f[3].forEach(c=>FAMX[c]=f[0]));
-const CRG=FAMS.map(f=>[f[0],f[1]+' pilots',f[2],CRQ[f[4]][0],CRQ[f[4]][1]]).concat([['CAB','Cabin crew','All aircraft',.008,35]]),CRH={pil:75,cab:85},CRK=Object.fromEntries(CRG.map(g=>[g[0],g]));
-const crGrp=t=>FAMX[t[0]]||(t[2]==='Regional'?'ERJ':t[2]==='Wide'?'B787':'A320'),crCap=k=>k==='CAB'?CRH.cab:CRH.pil;
+const CRG=FAMS.map(f=>[f[0],f[1]+' pilots',f[2],CRQ[f[4]][0],CRQ[f[4]][1]]).concat(FAMS.map(f=>['C_'+f[0],f[1]+' cabin crew',f[2],.008,35])),CRH={pil:75,cab:85},CRK=Object.fromEntries(CRG.map(g=>[g[0],g]));
+const crGrp=t=>FAMX[t[0]]||(t[2]==='Regional'?'ERJ':t[2]==='Wide'?'B787':'A320'),crCap=k=>k[0]==='C'&&k[1]==='_'?CRH.cab:CRH.pil,crCg=t=>'C_'+crGrp(t);
 function crPil(t,b){const h=b/60;if(t[3]<=12)return 1;return t[2]==='Wide'?(h>=8?4:h>=6?3:2):(t[2]==='Mid'||t[2]==='Narrow')?(h>=7?3:2):2}
 const crCab=(t,f)=>{const s=f.seats||t[3];return s<=19?0:Math.max(t[2]==='Regional'?1:2,Math.ceil(s/50))};
-function crNeed(){const nd=Object.fromEntries(CRG.map(g=>[g[0],0]));S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const h=2*r.rt*PLD(r)*30/7*g.b/60;nd[crGrp(t)]+=h*crPil(t,g.b);nd.CAB+=h*crCab(t,f)});return nd}
-function crState(){if(!S.crew){const nd=crNeed(),n={};CRG.forEach(([k])=>{n[k]=Math.ceil(nd[k]/crCap(k)*1.12)});S.crew={n,q:[],auto:0,due:0}}const c=S.crew;if(c.n.NB!==undefined||c.n.REG!==undefined||c.n.WB!==undefined)crMig(c);CRG.forEach(([k])=>{if(c.n[k]==null)c.n[k]=0});return c}
+function crNeed(){const nd=Object.fromEntries(CRG.map(g=>[g[0],0]));S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const h=2*r.rt*PLD(r)*30/7*g.b/60;nd[crGrp(t)]+=h*crPil(t,g.b);nd[crCg(t)]+=h*crCab(t,f)});return nd}
+function crState(){if(!S.crew){const nd=crNeed(),n={};CRG.forEach(([k])=>{n[k]=Math.ceil(nd[k]/crCap(k)*1.12)});S.crew={n,q:[],auto:0,due:0}}const c=S.crew;if(c.n.CAB!==undefined)crMigCab(c);if(c.n.NB!==undefined||c.n.REG!==undefined||c.n.WB!==undefined)crMig(c);CRG.forEach(([k])=>{if(c.n[k]==null)c.n[k]=0});return c}
 /* one-off move from the old regional / narrow / wide pools to aircraft-family pools */
 function crMig(c){const nd=crNeed(),cat={REG:t=>t[2]==='Regional',NB:t=>t[2]==='Narrow'||t[2]==='Mid',WB:t=>t[2]==='Wide'},fm={REG:{},NB:{},WB:{}};
   S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code];for(const o in cat)if(cat[o](t))fm[o][crGrp(t)]=1});
@@ -2097,45 +2097,51 @@ function crMig(c){const nd=crNeed(),cat={REG:t=>t[2]==='Regional',NB:t=>t[2]==='
   const pick=(o)=>{const ks=Object.keys(fm[o]);return ks.length?ks.sort((a,b)=>(nd[b]||0)-(nd[a]||0)):[]};
   for(const o of['REG','NB','WB']){const N=c.n[o]||0,ks=pick(o);delete c.n[o];if(ks.length){const tot=ks.reduce((a,k)=>a+(nd[k]||0),0);let left=N;ks.forEach((k,i)=>{const sh=i===ks.length-1?left:Math.min(left,Math.round(N*(tot?(nd[k]||0)/tot:1/ks.length)));c.n[k]=(c.n[k]||0)+sh;left-=sh})}
     c.q=c.q.map(q=>q.k===o?(ks.length?{...q,k:ks[0]}:null):q).filter(Boolean)}}
-let CRC={t:0,u:null};
+function crMigCab(c){const nd=crNeed(),N=c.n.CAB||0;delete c.n.CAB;let ks=FAMS.map(f=>'C_'+f[0]).filter(k=>nd[k]>0);if(!ks.length){const fs={};S.fleet.forEach(f=>fs['C_'+crGrp(TY[f.code])]=1);ks=Object.keys(fs)}
+  ks.sort((a,b)=>(nd[b]||0)-(nd[a]||0));if(ks.length){const tot=ks.reduce((a,k)=>a+(nd[k]||0),0);let left=N;ks.forEach((k,i)=>{const sh=i===ks.length-1?left:Math.min(left,Math.round(N*(tot?(nd[k]||0)/tot:1/ks.length)));c.n[k]=(c.n[k]||0)+sh;left-=sh})}
+  c.q=c.q.map(q=>q.k==='CAB'?(ks.length?{...q,k:ks[0]}:null):q).filter(Boolean)}
+let CRC={t:0,u:null},CRO={};
 function crUtil(){const n=Date.now();if(CRC.u&&n-CRC.t<30000)return CRC.u;const c=crState(),nd=crNeed(),u={};CRG.forEach(([k])=>{const cap=c.n[k]*crCap(k);u[k]={need:nd[k],cap,u:cap>0?nd[k]/cap:(nd[k]>0?9:0)}});CRC={t:n,u};return u}
 const crDirty=()=>{CRC.t=0};
 /* crew check for one flight: may cancel it, or add overtime cost */
-function crCheck(r,f,t,b,id,e){const u=crUtil(),ks=[crGrp(t),'CAB'];let p=0,ot=0;ks.forEach(k=>{const x=u[k].u;if(x>1.3)p=Math.max(p,(x-1.3)/x);if(x>1)ot=Math.max(ot,(Math.min(x,1.3)-1)/Math.min(x,1.3)*.8)});
+function crCheck(r,f,t,b,id,e){const u=crUtil(),ks=[crGrp(t),crCg(t)];let p=0,ot=0;ks.forEach(k=>{const x=u[k].u;if(x>1.3)p=Math.max(p,(x-1.3)/x);if(x>1)ot=Math.max(ot,(Math.min(x,1.3)-1)/Math.min(x,1.3)*.8)});
   if(p>0&&rng(hs(id+'crew'))()<p)return{cancel:1};return{extra:ot&&e&&e.cb?e.cb.crew*ot:0}}
 const crIdle=()=>{if(!S.crew&&!S.routes.length)return 0;const u=crUtil();let c=0;CRG.forEach(([k,,,,hr])=>{c+=Math.max(0,u[k].cap-u[k].need)*hr/1e6});return c}
 function crTick(n){if(!S.routes.length&&!(S.crew&&S.crew.q.length))return false;const c=crState();let ch=false;const keep=[];
   c.q.forEach(q=>{if(q.due>n){keep.push(q);return}c.n[q.k]+=q.n;crDirty();log(q.n+' '+CRK[q.k][1].toLowerCase()+' finished training');ch=true});c.q=keep;
   if(c.auto){const u=crUtil();CRG.forEach(([k])=>{const inq=c.q.filter(q=>q.k===k).reduce((a,q)=>a+q.n,0),want=Math.ceil(u[k].need/crCap(k)*1.1)-c.n[k]-inq;if(want>0)crHire(k,want,1)&&(ch=true)})}
   if(!c.due)c.due=n+per();let k=0;while(c.due<=n&&k++<60){const i=crIdle();if(i>0){LG('Crew standby pay').cash-=amt(i);ch=true}c.due+=per()}return ch}
-function crHire(k,n,auto){const c=crState(),g=CRK[k],cost=g[3]*n;if(S.cash<cost){if(!auto)toast('Needs '+money(cost),1);return false}LG('Crew recruitment and training').cash-=cost;c.q.push({k,n,due:now()+(k==='CAB'?1:2)*S.ratio*MIN});if(!auto)toast(n+' hired, training');save();return true}
+function crHire(k,n,auto){const c=crState(),g=CRK[k],cost=g[3]*n;if(S.cash<cost){if(!auto)toast('Needs '+money(cost),1);return false}LG('Crew recruitment and training').cash-=cost;c.q.push({k,n,due:now()+(crCap(k)===CRH.cab?1:2)*S.ratio*MIN});if(!auto)toast(n+' hired, training');save();return true}
 function crRelease(k,n){const c=crState(),g=CRK[k];n=Math.min(n,c.n[k]);if(n<=0)return;const cost=g[3]*.25*n;if(S.cash<cost)return toast('Severance needs '+money(cost),1);LG('Crew severance').cash-=cost;c.n[k]-=n;crDirty();save();toast(n+' released')}
 function crAlerts(){if(!S.routes.length)return[];const u=crUtil(),a=[];CRG.forEach(([k,nm])=>{const x=u[k];if(x.need<=0)return;if(x.u>1.3)a.push(['rd',nm+' badly short: flights are being cancelled. Hire more.']);else if(x.u>1.02)a.push(['am',nm+' stretched: overtime and contract crew are raising costs.'])});return a}
 function crewView(){if(!S.routes.length&&!(S.crew&&S.crew.n&&Object.values(S.crew.n).some(v=>v)))return'';const c=crState(),u=crUtil(),idle=crIdle()*PLU(),pu=S.bill==='week'?'week':'month';
   let h='<div class="card"><div class="row"><b>Crew and rostering</b><label class="mut"><input type="checkbox" id="crauto"'+(c.auto?' checked':'')+'> Auto-hire</label></div><div class="mut" style="margin:4px 0">The roster is automatic. You set headcount; idle crew still draw pay ('+money(idle)+' per '+pu+' now).</div></div>';
-  h+=CRG.map(([k,nm,ds,cost])=>{const x=u[k],q=c.q.filter(z=>z.k===k),inq=q.reduce((a,z)=>a+z.n,0);if(!c.n[k]&&!x.need&&!inq)return'';
-    const pc=Math.min(150,Math.round(x.u*100)),st=x.u>1.3?['rd','Short: cancelling flights']:x.u>1.02?['am','Stretched: overtime']:x.u<.7&&c.n[k]>0?['am','Over-staffed: paying idle crew']:['ok','Covered'],tgt=Math.max(0,Math.ceil(x.need/crCap(k)*1.1)-c.n[k]-inq);
-    return'<div class="card"><div class="row"><b>'+nm+'</b><span class="'+st[0]+'">'+st[1]+'</span></div><div class="mut">'+ds+'</div>'
-      +'<div class="g" style="margin-top:6px"><div><small>Employed</small><b>'+c.n[k]+'</b></div><div><small>In training</small><b>'+inq+'</b></div><div><small>Hours needed</small><b>'+Math.round(x.need)+'</b></div><div><small>Utilisation</small><b>'+pc+'%</b></div></div>'
-      +'<div style="height:6px;background:var(--line);border-radius:3px;margin:6px 0;overflow:hidden"><div style="width:'+Math.min(100,pc/1.5)+'%;height:100%;background:var(--'+(x.u>1.3?'red':x.u>1.02?'amber':'teal')+',#2dd4bf)"></div></div>'
-      +'<div class="row" style="gap:6px;flex-wrap:wrap"><button data-crh="'+k+'|1">Hire 1 ('+money(cost)+')</button><button data-crh="'+k+'|5">Hire 5</button>'+(tgt?'<button class="pri" data-crh="'+k+'|'+tgt+'">Hire '+tgt+' to cover</button>':'')+'<button data-crr="'+k+'|1">Release 1</button></div>'
-      +(q.length?'<div class="mut" style="margin-top:4px">Ready in '+fmtD(Math.min(...q.map(z=>z.due))-now())+'</div>':'')+'</div>'}).join('');
+  const st=x=>x.u>1.3?['rd','Short: cancelling flights',3]:x.u>1.02?['am','Stretched: overtime',2]:x.u<.7&&x.cap>0?['am','Over-staffed',1]:['ok','Covered',0];
+  const row=(k,lbl)=>{const x=u[k],q=c.q.filter(z=>z.k===k),inq=q.reduce((a,z)=>a+z.n,0),cost=CRK[k][3],tgt=Math.max(0,Math.ceil(x.need/crCap(k)*1.1)-c.n[k]-inq),pc=Math.round(x.u*100),s=st(x);
+    return'<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row"><span><b>'+lbl+'</b> <span class="mut">'+c.n[k]+' employed'+(inq?' · '+inq+' training':'')+' · needs '+Math.round(x.need/crCap(k)*10)/10+'</span></span><span class="'+s[0]+'">'+(x.need>0?pc+'%':'idle')+'</span></div>'
+    +'<div style="height:5px;background:var(--line);border-radius:3px;margin:5px 0;overflow:hidden"><div style="width:'+Math.min(100,pc/1.5)+'%;height:100%;background:var(--'+(x.u>1.3?'red':x.u>1.02?'amber':'teal')+',#2dd4bf)"></div></div>'
+    +'<div class="row" style="gap:6px;flex-wrap:wrap"><button data-crh="'+k+'|1">Hire 1 ('+money(cost)+')</button><button data-crh="'+k+'|5">Hire 5</button>'+(tgt?'<button class="pri" data-crh="'+k+'|'+tgt+'">Hire '+tgt+' to cover</button>':'')+'<button data-crr="'+k+'|1">Release 1</button></div>'
+    +(q.length?'<div class="mut" style="margin-top:4px">Ready in '+fmtD(Math.min(...q.map(z=>z.due))-now())+'</div>':'')+'</div>'};
+  h+=FAMS.map(f=>{const kp=f[0],kc='C_'+f[0],xp=u[kp],xc=u[kc];if(!c.n[kp]&&!c.n[kc]&&!xp.need&&!xc.need&&!c.q.some(z=>z.k===kp||z.k===kc))return'';
+    const sp=st(xp),sc=st(xc),w=sp[2]>=sc[2]?sp:sc,open=CRO[kp]!==undefined?CRO[kp]:w[2]>=2;
+    return'<div class="card"><div class="row" data-crt="'+kp+'" style="cursor:pointer"><span><b>'+f[1]+'</b><div class="mut" style="font-size:11px">Pilots '+c.n[kp]+' / '+Math.ceil(xp.need/CRH.pil)+' · Cabin '+c.n[kc]+' / '+Math.ceil(xc.need/CRH.cab)+'</div></span><span class="'+w[0]+'">'+w[1]+' '+(open?'▴':'▾')+'</span></div>'
+      +(open?row(kp,'Pilots')+row(kc,'Cabin crew'):'')+'</div>'}).join('');
   return h+'<div class="mut" style="margin:4px 0 10px;font-size:11px">A pilot or cabin crew member covers about '+CRH.pil+' / '+CRH.cab+' block hours a month. Long wide-body sectors carry extra pilots. Contract crew cover up to a 30% overload at a premium, flights are cancelled.</div>'}
-document.addEventListener('click',e=>{const a=e.target.closest('[data-crh]');if(a){const[k,n]=a.dataset.crh.split('|');if(crHire(k,+n))render();return}const r=e.target.closest('[data-crr]');if(r){const[k,n]=r.dataset.crr.split('|');crRelease(k,+n);render();return}if(e.target.id==='crauto'){S.crew.auto=e.target.checked?1:0;save()}});
+document.addEventListener('click',e=>{const tg=e.target.closest('[data-crt]');if(tg&&!e.target.closest('button')){const k=tg.dataset.crt,u=crUtil(),cur=CRO[k]!==undefined?CRO[k]:(u[k].u>1.02||u['C_'+k].u>1.02);CRO[k]=!cur;render();return}const a=e.target.closest('[data-crh]');if(a){const[k,n]=a.dataset.crh.split('|');if(crHire(k,+n))render();return}const r=e.target.closest('[data-crr]');if(r){const[k,n]=r.dataset.crr.split('|');crRelease(k,+n);render();return}if(e.target.id==='crauto'){S.crew.auto=e.target.checked?1:0;save()}});
 
 /* crew an aircraft needs at typical utilisation, against the spare capacity in your pool */
-function crReq(t,seats){const hd=t[3]<=19?6:t[2]==='Regional'?8:t[2]==='Wide'?12:t[2]==='Mid'?10:9,h=hd*30,pp=t[3]<=12?1:t[2]==='Wide'?3:2,cb=crCab(t,{seats});return{g:crGrp(t),pil:Math.ceil(h*pp/CRH.pil),cab:Math.ceil(h*cb/CRH.cab),h,pp,cb}}
+function crReq(t,seats){const hd=t[3]<=19?6:t[2]==='Regional'?8:t[2]==='Wide'?12:t[2]==='Mid'?10:9,h=hd*30,pp=t[3]<=12?1:t[2]==='Wide'?3:2,cb=crCab(t,{seats});return{g:crGrp(t),cg:crCg(t),pil:Math.ceil(h*pp/CRH.pil),cab:Math.ceil(h*cb/CRH.cab),h,pp,cb}}
 function crSpare(k){if(!S.crew)return null;const u=crUtil()[k];if(!u)return null;return Math.floor(((S.crew.n[k]||0)*crCap(k)-u.need)/crCap(k))}
 function crTag(t,seats){const q=crReq(t,seats),line=(n,k,lbl,per,unit)=>{if(!n)return'no '+lbl;const s=crSpare(k);return'<b>~'+n+'</b> '+lbl+' on payroll <span class="mut">('+per+' '+unit+')</span>'+(s==null?'':s>=n?' <span class="ok">(spare in pool: '+s+')</span>':' <span class="am">(hire ~'+(n-Math.max(0,s))+')</span>')};
-  return '<div class="mut">Crew per aircraft: '+line(q.pil,q.g,(CRK[q.g]?CRK[q.g][1]:'pilots'),q.pp,q.pp>1?'in the cockpit':'in the cockpit')+' · '+line(q.cab,'CAB','cabin crew',q.cb,'on board')+'</div>'}
+  return '<div class="mut">Crew per aircraft: '+line(q.pil,q.g,(CRK[q.g]?CRK[q.g][1]:'pilots'),q.pp,q.pp>1?'in the cockpit':'in the cockpit')+' · '+line(q.cab,q.cg,'cabin crew',q.cb,'on board')+'</div>'}
 /* after buying, leasing or ordering: say what crew the aircraft needs and offer to hire it (nothing is hired unless you accept) */
 let CRP=null;
-function crPrompt(t,seats,n,how){if(!S.crew)return;const q=crReq(t,seats),sp=crSpare(q.g),sc=crSpare('CAB'),np=Math.max(0,q.pil*n-Math.max(0,sp)),nc=Math.max(0,q.cab*n-Math.max(0,sc));if(!np&&!nc)return;CRP={g:q.g,np,nc};
-  const pc=CRK[q.g][3]*np,cc=CRK.CAB[3]*nc;AO('<h3>Crew for your '+(n>1?n+' x ':'')+t[1]+'</h3><div class="mut" style="margin:6px 0">'+how+' Nothing is hired automatically, and training takes '+fmtD(2*S.ratio*MIN)+' for pilots'+(nc?' and '+fmtD(S.ratio*MIN)+' for cabin crew':'')+'.</div>'
+function crPrompt(t,seats,n,how){if(!S.crew)return;const q=crReq(t,seats),sp=crSpare(q.g),sc=crSpare(q.cg),np=Math.max(0,q.pil*n-Math.max(0,sp)),nc=Math.max(0,q.cab*n-Math.max(0,sc));if(!np&&!nc)return;CRP={g:q.g,cg:q.cg,np,nc};
+  const pc=CRK[q.g][3]*np,cc=CRK[q.cg][3]*nc;AO('<h3>Crew for your '+(n>1?n+' x ':'')+t[1]+'</h3><div class="mut" style="margin:6px 0">'+how+' Nothing is hired automatically, and training takes '+fmtD(2*S.ratio*MIN)+' for pilots'+(nc?' and '+fmtD(S.ratio*MIN)+' for cabin crew':'')+'.</div>'
     +'<div class="card"><div class="row"><b>Needed to fly it</b></div><div class="mut">'+(q.pil?q.pil*n+' pilots ('+q.pp+' in the cockpit per flight)':'No pilots needed')+(q.cab?' · '+q.cab*n+' cabin crew ('+q.cb+' on board)':' · no cabin crew')+'</div><div class="mut">Spare in your pool: '+Math.max(0,sp)+' pilots, '+Math.max(0,sc)+' cabin crew</div></div>'
     +'<div class="card"><b>Recommended hires</b><div class="mut">'+np+' '+CRK[q.g][1].toLowerCase()+' ('+money(pc)+')'+(nc?' · '+nc+' cabin crew ('+money(cc)+')':'')+'</div></div>'
     +'<div class="row" style="gap:8px;margin-top:10px"><button class="pri" id="crp_ok">Hire '+money(pc+cc)+'</button><button id="crp_no">Not now</button></div>')}
-document.addEventListener('click',e=>{if(e.target.id==='crp_no'){ACX();CRP=null}else if(e.target.id==='crp_ok'&&CRP){const p=CRP;CRP=null;let ok=true;if(p.np)ok=crHire(p.g,p.np)&&ok;if(p.nc)ok=crHire('CAB',p.nc)&&ok;ACX();render()}});
+document.addEventListener('click',e=>{if(e.target.id==='crp_no'){ACX();CRP=null}else if(e.target.id==='crp_ok'&&CRP){const p=CRP;CRP=null;let ok=true;if(p.np)ok=crHire(p.g,p.np)&&ok;if(p.nc)ok=crHire(p.cg,p.nc)&&ok;ACX();render()}});
 (function(){const wrap=(name,get)=>{const f=window[name];if(typeof f!=='function')return;window[name]=function(...a){const x=get(a),n0=S.fleet.length+S.orders.length+(S.orders.reduce((s,o)=>s+(o.n||1),0)),r=f.apply(this,a),n1=S.fleet.length+S.orders.length+(S.orders.reduce((s,o)=>s+(o.n||1),0));
   if(x&&n1>n0)try{crPrompt(x.t,x.seats,x.n||1,x.how)}catch(e){}return r}};
   wrap('buy',a=>{const l=market_().find(z=>z.id===a[0]);return l&&{t:l.t,seats:l.t[3],n:1,how:'You bought it.'}});
@@ -2872,4 +2878,4 @@ document.addEventListener('input',e=>{if(e.target.id==='ac_nm'){const v=e.target
 if(LOCKED){if(!CUR)loginView();else pinView(CUR)}
 document.querySelector('h1').textContent=S.name||'Off Blocks';
 render();setInterval(()=>{if(document.hidden)return;if(NETOK&&tick())render();else hud()},2000);
-</script><script>if('serviceWorker' in navigator&&location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script></body></html>
+</script><script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});</script></body></html>
