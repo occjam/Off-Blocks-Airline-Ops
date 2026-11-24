@@ -2684,9 +2684,13 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-hsell]');i
   const p=c*.7;S.hubs=S.hubs.filter(x=>x!==a);delete S.hubCost[a];delete S.hubDue[a];LG('Hub sales').cash+=p;log('Sold hub '+a+' for '+money(p));save();toast('Hub sold: '+money(p));render()});
 /* ---------- advance bookings: 24 h booking window ---------- */
 const BKW=24*3600000;
-const bkSf=(r,dep)=>{const c=r.created||0,av=Math.max(0,Math.min(BKW,dep-c)),x=av/BKW;return .3+.7*Math.pow(x,.7)};
+const BKL=5;
+function bkOrd(r,dep){const c0=r.created||0;if(dep-c0>30*DAY)return 99;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return 99;const g=geom(r,TY[f.code]);if(!g)return 99;let c=0;
+  for(let d=dayIdx(c0);d<=dayIdx(dep);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dp=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN;if(dp>=c0&&dp<dep){c++;if(c>=BKL)return BKL}}return c}
+const bkLaunch=(r,dep)=>bkOrd(r,dep)<BKL;
+const bkSf=(r,dep)=>{if(bkLaunch(r,dep))return 1;const c=r.created||0,av=Math.max(0,Math.min(BKW,dep-c)),x=av/BKW;return .3+.7*Math.pow(x,.7)};
 const bkB=s=>1-Math.pow(1-Math.max(0,Math.min(1,s)),1.6);
-function bkApply(r,e,dep){const k=bkSf(r,dep);e.bk=k;if(k>=.999)return;e.pax=Math.round(e.pax*k);e.rev*=k;e.cxp=Math.round((e.cxp||0)*k);if(e.cb)e.cost-=(e.cb.pxs+e.cb.cat)*(1-k)}
+function bkApply(r,e,dep){if(bkLaunch(r,dep)){e.bk=1;e.launch=1;if(e.seats>0&&e.pax>0&&e.pax<e.seats){const kp=e.seats/e.pax;e.rev*=kp;if(e.cb)e.cost+=(e.cb.pxs+e.cb.cat)*(kp-1);e.pax=e.seats}return}const k=bkSf(r,dep);e.bk=k;if(k>=.999)return;e.pax=Math.round(e.pax*k);e.rev*=k;e.cxp=Math.round((e.cxp||0)*k);if(e.cb)e.cost-=(e.cb.pxs+e.cb.cat)*(1-k)}
 const BKC={};
 function bkExp(r,f,t,n){const c=BKC[r.id];if(c&&n-c.t<10*60000&&c.f===f.reg)return c;let a={rev:0,pax:0,seats:0};try{const e=econ(r,f,t,0,.5,n),e2=econ(r,f,t,1,.5,n);a={rev:(e.rev+e2.rev)/2,pax:(e.pax+e2.pax)/2,seats:(e.seats+e2.seats)/2}}catch(x){}return BKC[r.id]={t:n,f:f.reg,...a}}
 function bkFlights(r,f,t,g,n,hz){const out=[];for(let d=dayIdx(n)-1;d<=dayIdx(n+hz);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
@@ -2711,7 +2715,7 @@ const ffCur=id=>{const s=ffSeg(id);return s?s[s.length-1][1]:1};
 function ffCalc(segs,Db,seats,paxb,rev){let Ds=0,Rs=0;segs.forEach((s,i)=>{const w=(i<segs.length-1?segs[i+1][0]:1)-s[0],m=s[1],d=Db*Math.exp(-FFK*(m-1));Ds+=w*d;Rs+=w*m*d});
   const c=Ds>seats&&Ds>0?seats/Ds:1;return{pax:Ds*c,rev:paxb>0?rev/paxb*Rs*c:rev}}
 function ffDb(r,id,dep,sf){const pd=pairDemand(r);if(!pd)return 0;return pd.perFlight*seas(r,dep)*(0.92+0.16*rng(hs(id))())*(1-(S.repPen||0))*(sf==null?bkSf(r,dep):sf)}
-function ffApply(r,e,id,dep,segs){const sg=segs||ffSeg(id);if(!sg||!e.seats||!e.pax)return e;const Db=ffDb(r,id,dep,e.bk);if(!Db)return e;
+function ffApply(r,e,id,dep,segs){const sg=segs||ffSeg(id);if(!sg||!e.seats||!e.pax)return e;let Db=ffDb(r,id,dep,e.bk);if(!Db)return e;if(e.launch)Db=Math.max(Db,e.seats);
   const o=ffCalc(sg,Db,e.seats,e.pax,e.rev),kp=o.pax/e.pax;e.rev=o.rev;if(e.cb)e.cost+=(e.cb.pxs+e.cb.cat)*(kp-1);e.pax=Math.round(o.pax);e.ff=1;
   if(!segs&&S.ff[id].a)e.cost+=e.rev*FFFEE;return e}
 function ffSet(r,id,dep,m,auto){S.ff=S.ff||{};const E=S.ff[id]||(S.ff[id]={s:[[0,1]],a:0});const ts=bkShare(r,dep,now()),L=E.s[E.s.length-1];
@@ -2721,7 +2725,7 @@ function ffProj(r,f,t,L,m){const e=econ(r,f,t,L.dir,rng(hs(L.id))(),L.dep);bkApp
 function ffFac(id){const s=ffSeg(id);if(!s)return 1;let a=0;s.forEach((x,i)=>{const w=(i<s.length-1?s[i+1][0]:1)-x[0];a+=w*x[1]*Math.exp(-FFK*(x[1]-1))});return a}
 function ffAuto(n){if(S.spT&&n-S.spT<10*60000)return false;S.spT=n;let ch=false;
   S.routes.forEach(r=>{const lv=r.sp|0;if(!lv)return;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const lim=FFL[lv-1],seats=f.seats||t[3];
-    bkFlights(r,f,t,g,n,BKW).forEach(L=>{if(L.dep<n+20*60000)return;const E=S.ff&&S.ff[L.id];if(E&&E.lock)return;const Db=ffDb(r,L.id,L.dep);if(!Db)return;
+    bkFlights(r,f,t,g,n,BKW).forEach(L=>{if(L.dep<n+20*60000||bkLaunch(r,L.dep))return;const E=S.ff&&S.ff[L.id];if(E&&E.lock)return;const Db=ffDb(r,L.id,L.dep);if(!Db)return;
       let tg=Db>seats?1+Math.log(Db/seats)/FFK:1;tg=Math.round(Math.max(lim[0],Math.min(lim[1],tg))*20)/20;const cur=ffCur(L.id);if(Math.abs(tg-cur)>=.05){ffSet(r,L.id,L.dep,tg,1);ch=true}})});
   if(S.ff){const d0=dayIdx(n)-3;for(const k in S.ff){const d=+k.split(':')[1];if(d<d0)delete S.ff[k]}}return ch}
 const FFO={};
