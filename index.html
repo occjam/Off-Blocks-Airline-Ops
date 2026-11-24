@@ -881,7 +881,7 @@ function startView(){const L=hubList(apq);return '<h3>Set up '+(S.name||'your ai
   L.map(a=>'<div class="card"><div class="row"><span><span class="code">'+a+'</span> '+AP[a].city+'<div class="mut">Grade '+gradeOf(eff(a))+' · '+capOf(a)+' slots/h · catchment '+(AP[a].pop>=1e6?(AP[a].pop/1e6).toFixed(1)+'M':Math.round(AP[a].pop/1000)+'k')+' · landing $'+land(a).toFixed(2)+'/t</div><div class="mut">'+rgp(a).n+' · start with $'+scCash(S.scn,a)+'M</div></span><button class="pri" data-start="'+a+'">Start here</button></div></div>').join('')||'<div class="mut">No match.</div>'}
 function hubsView(){const L=hubList(apq).filter(a=>!S.hubs.includes(a));
   const fee=c=>amt(c*0.01);
-  return '<h3>Your hubs</h3>'+S.hubs.map(a=>{const c=S.hubCost[a]||0,n=S.routes.filter(r=>r.o===a).length;return '<div class="card"><div class="row"><span><span class="code">'+a+'</span> '+AP[a].city+(a===S.base?' <span class="badge">active</span>':'')+'</span><span>'+(a===S.base?'':'<button data-act="'+a+'">Make active</button>')+'</span></div><div class="mut">'+n+' route'+(n===1?'':'s')+' · '+(c?'upkeep '+money(fee(c))+(S.bill==='week'?'/wk':'/mo'):'no upkeep (starting hub)')+'</div></div>'}).join('')+
+  return '<h3>Your hubs</h3>'+S.hubs.map(a=>{const c=S.hubCost[a]||0,n=S.routes.filter(r=>r.o===a).length;return '<div class="card"><div class="row"><span><span class="code">'+a+'</span> '+AP[a].city+(a===S.base?' <span class="badge">active</span>':'')+'</span><span>'+(a===S.base?'':'<button data-act="'+a+'">Make active</button>')+'</span></div>'+(typeof hubSellUI==='function'?hubSellUI(a,n,c):'')+'<div class="mut">'+n+' route'+(n===1?'':'s')+' · '+(c?'upkeep '+money(fee(c))+(S.bill==='week'?'/wk':'/mo'):'no upkeep (starting hub)')+'</div></div>'}).join('')+
   '<h3>Buy a hub</h3><div class="mut" style="margin-bottom:6px">One-time purchase of terminal and ground-handling rights, plus 1% a month upkeep. Price scales with airport grade and size.</div><div class="bar"><input id="apq" placeholder="Search airport or city (default: popular)" value="'+apq+'"></div>'+
   L.map(a=>{const c=hubCost(a)*hubFx(a);return '<div class="card"><div class="row"><span><span class="code">'+a+'</span> '+AP[a].city+(hubFx(a)>1?' <span class="badge">Foreign +50%</span>':'')+(foreignCC(AP[a].cc)?'<div class="mut">Domestic flights here not permitted for foreign airlines</div>':'')+'<div class="mut">Grade '+gradeOf(eff(a))+' · '+capOf(a)+' slots/h · '+money(c)+' + '+money(fee(c))+(S.bill==='week'?'/wk':'/mo')+'</div></span><button data-hub="'+a+'"'+(S.cash<c?' disabled':'')+'>Buy</button></div></div>'}).join('')}
 function buyHub(a){if(BLK.includes(AP[a].cc))return toast('No foreign hub is possible in '+AP[a].cc,1);const c=hubCost(a)*hubFx(a);if(S.cash<c)return toast('Needs '+money(c),1);LG('Hub purchases').cash-=c;S.hubs.push(a);S.hubCost[a]=c;S.hubDue[a]=now()+per();log('Bought hub '+a+' for '+money(c));save();toast('Hub bought: '+a);render()}
@@ -1024,7 +1024,7 @@ function newRouteCard(free){
   h+='<span class="lab">First departure (UTC)</span><div class="bar" style="margin:0"><select id="nr_h">'+[...Array(24).keys()].map(x=>'<option value="'+x+'"'+(x===Math.floor(NR.dep/60)?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="nr_m">'+[0,15,30,45].map(x=>'<option value="'+x+'"'+(x===NR.dep%60?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="nr_rt">'+[1,2,3,4,5,6].map(x=>'<option value="'+x+'"'+(x===NR.rt?' selected':'')+'>'+x+' round trip'+(x>1?'s':'')+' / day</option>').join('')+'</select></div><div class="bar" style="margin:6px 0 0">'+WD.map((w,x)=>'<button data-wd="'+x+'" class="'+((NR.days||ALLD).includes(x)?'on':'')+'">'+w+'</button>').join('')+'</div>';
   if(NR.autoMsg&&!NR.manual)h+='<div class="mut" style="margin-top:6px">'+NR.autoMsg+'</div>';
   h+='<span class="lab">Rivals on this route</span><div id="nr_rv"></div>';
-  h+='<span class="lab">Base fare '+usd(r.fare)+' + '+usd(psc(S.base))+' taxes and charges = '+usd(r.fare+psc(S.base))+' ticket ('+Math.round(NR.fm*100)+'% of reference '+usd(ref)+')</span><input type="range" id="nr_f" min="60" max="200" value="'+Math.round(NR.fm*100)+'">';
+  h+='<span class="lab">Base fare '+usd(r.fare)+' + '+usd(psc(S.base))+' taxes and charges = '+usd(r.fare+psc(S.base))+' ticket ('+Math.round(NR.fm*100)+'% of reference '+usd(ref)+')</span>'+(typeof fareCtl==='function'?fareCtl(r.fare,ref):'<input type="range" id="nr_f" min="60" max="200" value="'+Math.round(NR.fm*100)+'">');
   {const fi=fareInfo(d,S.base,NR.d);h+='<div class="mut" style="margin-top:2px">Market: '+fi.label+' · typical one-way ticket '+usd(fi.tot)+' incl. taxes</div><div class="mut">Season: '+seasTxt(S.base,NR.d)+'</div>'}
   const e=econ(r,f,t,0,.5),e2=econ(r,f,t,1,.5),slot=slotCheck(r,t,0)||acConflict(r,f,0);
   const rev=(e.rev+e2.rev)*wkf(r),cost=(e.cost+e2.cost)*wkf(r);
@@ -2665,6 +2665,21 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-pn]');if(!
   if(k==='rm'){delete p.pin;prSave();toast('PIN removed');render();return}
   const n=g('pn_new');if(!/^\d{4}$/.test(n))return toast('Enter exactly 4 digits',1);p.pin=pinH(n);prSave();try{sessionStorage.setItem('gom_ok',p.id)}catch(x){}toast(k==='set'?'PIN set':'PIN changed');render()});
 
+/* ---------- fare controls ---------- */
+const fmClamp=x=>Math.max(.4,Math.min(2.5,x));
+function fareCtl(fare,ref){return'<div class="row" style="gap:6px;margin-top:6px;align-items:center"><button data-nrfm="-5">−5%</button><button data-nrfm="-1">−1%</button><input id="nr_fv" type="number" inputmode="numeric" value="'+fare+'" style="flex:1;min-width:0;text-align:center;font:700 18px var(--mono)"><button data-nrfm="1">+1%</button><button data-nrfm="5">+5%</button></div>'
+ +'<input type="range" id="nr_f" min="40" max="250" step="1" value="'+Math.round(NR.fm*100)+'" style="width:100%;margin-top:8px"><div class="row" style="margin-top:2px"><span class="mut" id="nr_fl">'+Math.round(NR.fm*100)+'% of market fare</span><button data-nrfm="0">Reset to market '+usd(ref)+'</button></div>'}
+function fareLive(v){const ref=refFare(nm(S.base,NR.d),S.base,NR.d),l=document.getElementById('nr_fl'),i=document.getElementById('nr_fv');if(l)l.textContent=Math.round(v)+'% of market fare';if(i)i.value=Math.round(ref*v/100)}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-nrfm]');if(!b||!NR)return;const n=+b.dataset.nrfm;NR.fm=n===0?1:fmClamp(NR.fm+n/100);render()});
+document.addEventListener('change',e=>{if(!NR)return;if(e.target.id==='nr_f'){NR.fm=fmClamp(e.target.value/100);render()}else if(e.target.id==='nr_fv'){const ref=refFare(nm(S.base,NR.d),S.base,NR.d),v=+e.target.value;if(v>0&&ref>0)NR.fm=fmClamp(v/ref);render()}});
+/* ---------- sell a hub ---------- */
+let HSC=null;
+function hubSellUI(a,n,c){let why='';if((S.hubs||[]).length<2)why='Your only hub';else if(a===S.base)why='Make another hub active first';else if(!c)why='Starting hub';else if(n)why='End its '+n+' route'+(n>1?'s':'')+' first';
+  const p=c*.7;return'<div class="row" style="margin-top:6px"><span class="mut">Sale value '+(c?money(p)+' (70% of purchase)':'n/a')+'</span>'+(why?'<span class="mut">'+why+'</span>':(HSC===a?'<button data-hsell="'+a+'" class="pri">Tap again to sell</button>':'<button data-hsell="'+a+'">Sell hub</button>'))+'</div>'}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-hsell]');if(!b)return;const a=b.dataset.hsell;if(HSC!==a){HSC=a;render();return}
+  const c=S.hubCost[a]||0,n=S.routes.filter(r=>r.o===a).length;HSC=null;if((S.hubs||[]).length<2||a===S.base||!c||n)return render();
+  const p=c*.7;S.hubs=S.hubs.filter(x=>x!==a);delete S.hubCost[a];delete S.hubDue[a];LG('Hub sales').cash+=p;log('Sold hub '+a+' for '+money(p));save();toast('Hub sold: '+money(p));render()});
+
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');if(ps_){S.pos=ps_.dataset.pos;save();render();return}
   const sn=e.target.closest('[data-scn]');if(sn){S.scn=sn.dataset.scn;save();render();return}
@@ -2700,7 +2715,7 @@ document.addEventListener('input',e=>{const id=e.target.id;
   if(id==='nr_q'&&NR){NR.q=e.target.value;const f=S.fleet.find(x=>x.reg===NR.reg),qq=NR.q.trim().toLowerCase();if(f&&qq){const m=candidates(TY[f.code],f).filter(c=>c[0].toLowerCase().includes(qq)||AP[c[0]].city.toLowerCase().includes(qq));if(m.length&&!m.find(c=>c[0]===NR.d))NR.d=m[0][0]}render();const n=$('#nr_q');if(n){n.focus();const L=n.value.length;n.setSelectionRange(L,L)}return}
   if(id==='q'){q=e.target.value;shown=25;const p=e.target.selectionStart;render();const n=$('#q');n.focus();n.setSelectionRange(p,p)}
   else if(id==='apq'){apq=e.target.value;const p=e.target.selectionStart;render();const n=$('#apq');n.focus();n.setSelectionRange(p,p)}
-  else if(id==='nr_f'){NR.fm=e.target.value/100;render()}});
+  else if(id==='nr_f'){if(typeof fareLive==='function')fareLive(e.target.value);else{NR.fm=e.target.value/100;render()}}});
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(e.target.dataset&&e.target.dataset.cb){const [h,i,f]=e.target.dataset.cb.split('|');const b=S.banks&&S.banks[h]&&S.banks[h][+i];if(b){b[f]=cxP(v);save();render()}return}
   if(id==='sort'){sort=v;render()}
   if(id==='mkf'){mkF=v;tyF='All';shown=25;render()}
