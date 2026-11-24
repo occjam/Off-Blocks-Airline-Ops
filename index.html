@@ -2617,7 +2617,7 @@ function ordCard(i){const o=S.orders[i];if(!o)return'';try{dlvOrd(o)}catch(e){}c
    +row('Arrives',ordDt(o.due))
    +(o.kind==='lease'?row('Payments','Lease payments start on delivery'):o.kind==='own'?row('Payment','Paid in full'):row('Deposit paid',money(o.dep||0))+row('Balance due on delivery',money(o.bal||0)))
    +row('Registration',o.reg||'Assigned on delivery')+(o.cfg&&typeof cTxt==='function'?row('Cabin',cTxt(o.cfg)):'')):'')
-   +'<div class="bar" style="margin-top:8px"><button data-ordmap="'+i+'" class="pri">Show on map</button></div></div>'}
+   +'<div class="bar" style="margin-top:8px"><button data-ordmap="'+i+'" class="pri">Show on map</button>'+(((S.skipLeft==null?2:S.skipLeft)>0)?'<button data-ordnow="'+i+'">Deliver now ('+(S.skipLeft==null?2:S.skipLeft)+' free)</button>':'')+'</div></div>'}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dataset.ordmap==null)return;const i=+b.dataset.ordmap,o=S.orders[i];if(!o)return;try{dlvOrd(o)}catch(x){}
   const nav=document.querySelector('[data-t="map"]');if(nav)nav.click();else{tab='map';render()}
   setTimeout(()=>{try{const base=AP[S.base],A=o.from?{lat:o.from[1],lon:o.from[2]}:null;if(!base||!A)return;MS.proj='flat';MS.cx=(A.lon+base.lon)/2;MS.cy=(A.lat+base.lat)/2;
@@ -2630,6 +2630,8 @@ function tySpec(t,fl){try{if(!fl&&!SPO[t[0]])return'<button data-spctg="'+t[0]+'
   return(fl?'':'<button data-spctg="'+t[0]+'" style="margin-top:6px;width:100%">Hide specs ▴</button>')+'<div class="g" style="margin-top:6px"><div><small>Range</small><b>'+t[9].toLocaleString()+' nm</b></div><div><small>Cruise</small><b>'+t[8]+' kt</b></div><div><small>Fuel burn</small><b>'+t[7].toLocaleString()+' kg/h</b></div><div><small>Runway needed</small><b>'+t[11].toLocaleString()+' m</b></div><div><small>Length / span</small><b>'+t[22]+' / '+t[21]+' m</b></div><div><small>'+(b?S.base+' runway':'Runway')+'</small><b>'+(b?Math.round(e).toLocaleString()+' m':'n/a')+'</b></div></div>'+rr}catch(x){return''}}
 
 document.addEventListener('click',e=>{const b=e.target.closest('[data-ordtg]');if(b){const i=b.dataset.ordtg;ORO[i]=!ORO[i];render()}const c=e.target.closest('[data-spctg]');if(c){const k=c.dataset.spctg;SPO[k]=!SPO[k];render()}});
+
+document.addEventListener('click',e=>{const b=e.target.closest('[data-ordnow]');if(!b)return;const o=S.orders[+b.dataset.ordnow],L=S.skipLeft==null?2:S.skipLeft;if(!o||L<1)return;S.skipLeft=L-1;o.due=now();log('Skipped the wait: '+TY[o.code][1]+' delivered immediately ('+S.skipLeft+' free skip'+(S.skipLeft===1?'':'s')+' left)');save();try{tick()}catch(x){}render();toast('Delivered. '+S.skipLeft+' free skip'+(S.skipLeft===1?'':'s')+' left')});
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');if(ps_){S.pos=ps_.dataset.pos;save();render();return}
