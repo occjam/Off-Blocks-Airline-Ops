@@ -2132,21 +2132,16 @@ document.addEventListener('click',e=>{const tg=e.target.closest('[data-crt]');if
 /* crew an aircraft needs at typical utilisation, against the spare capacity in your pool */
 function crReq(t,seats){const hd=t[3]<=19?6:t[2]==='Regional'?8:t[2]==='Wide'?12:t[2]==='Mid'?10:9,h=hd*30,pp=t[3]<=12?1:t[2]==='Wide'?3:2,cb=crCab(t,{seats});return{g:crGrp(t),cg:crCg(t),pil:Math.ceil(h*pp/CRH.pil),cab:Math.ceil(h*cb/CRH.cab),h,pp,cb}}
 function crSpare(k){if(!S.crew)return null;const u=crUtil()[k];if(!u)return null;return Math.floor(((S.crew.n[k]||0)*crCap(k)-u.need)/crCap(k))}
-function crTag(t,seats){const q=crReq(t,seats),line=(n,k,lbl,per,unit)=>{if(!n)return'no '+lbl;const s=crSpare(k);return'<b>~'+n+'</b> '+lbl+' on payroll <span class="mut">('+per+' '+unit+')</span>'+(s==null?'':s>=n?' <span class="ok">(spare in pool: '+s+')</span>':' <span class="am">(hire ~'+(n-Math.max(0,s))+')</span>')};
+function crTag(t,seats){const q=crReq(t,seats),line=(n,k,lbl,per,unit)=>{if(!n)return'no '+lbl;const s=crSpare(k);return'<b>~'+n+'</b> '+lbl+' if flown full-time <span class="mut">('+per+' '+unit+')</span>'+(s==null?'':s>=n?' <span class="ok">(spare in pool: '+s+')</span>':' <span class="am">(hire ~'+(n-Math.max(0,s))+')</span>')};
   return '<div class="mut">Crew per aircraft: '+line(q.pil,q.g,(CRK[q.g]?CRK[q.g][1]:'pilots'),q.pp,q.pp>1?'in the cockpit':'in the cockpit')+' · '+line(q.cab,q.cg,'cabin crew',q.cb,'on board')+'</div>'}
 /* after buying, leasing or ordering: say what crew the aircraft needs and offer to hire it (nothing is hired unless you accept) */
 let CRP=null;
-function crPrompt(t,seats,n,how){if(!S.crew)return;const q=crReq(t,seats),sp=crSpare(q.g),sc=crSpare(q.cg),np=Math.max(0,q.pil*n-Math.max(0,sp)),nc=Math.max(0,q.cab*n-Math.max(0,sc));if(!np&&!nc)return;CRP={g:q.g,cg:q.cg,np,nc};
-  const pc=CRK[q.g][3]*np,cc=CRK[q.cg][3]*nc;AO('<h3>Crew for your '+(n>1?n+' x ':'')+t[1]+'</h3><div class="mut" style="margin:6px 0">'+how+' Nothing is hired automatically, and training takes '+fmtD(2*S.ratio*MIN)+' for pilots'+(nc?' and '+fmtD(S.ratio*MIN)+' for cabin crew':'')+'.</div>'
-    +'<div class="card"><div class="row"><b>Needed to fly it</b></div><div class="mut">'+(q.pil?q.pil*n+' pilots ('+q.pp+' in the cockpit per flight)':'No pilots needed')+(q.cab?' · '+q.cab*n+' cabin crew ('+q.cb+' on board)':' · no cabin crew')+'</div><div class="mut">Spare in your pool: '+Math.max(0,sp)+' pilots, '+Math.max(0,sc)+' cabin crew</div></div>'
-    +'<div class="card"><b>Recommended hires</b><div class="mut">'+np+' '+CRK[q.g][1].toLowerCase()+' ('+money(pc)+')'+(nc?' · '+nc+' cabin crew ('+money(cc)+')':'')+'</div></div>'
+function crPrompt(r){if(!S.crew||S.crew.auto)return;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=crGrp(t),cg='C_'+g;crDirty();const nd=crNeed(),c=crState(),want=k=>{const inq=c.q.filter(z=>z.k===k).reduce((a,z)=>a+z.n,0);return Math.max(0,Math.ceil(nd[k]/crCap(k)*1.1)-c.n[k]-inq)},np=want(g),nc=want(cg);if(!np&&!nc)return;CRP={g,cg,np,nc};
+  const pc=CRK[g][3]*np,cc=CRK[cg][3]*nc;AO('<h3>Crew for '+r.o+'-'+r.d+'</h3><div class="mut" style="margin:6px 0">Sized to the flying you have scheduled, not the aircraft\'s maximum. Add routes later and the number grows; Auto-hire in Crew does this for you. Nothing is hired unless you accept. Training takes '+fmtD(2*S.ratio*MIN)+' for pilots'+(nc?' and '+fmtD(S.ratio*MIN)+' for cabin crew':'')+'.</div>'
+    +'<div class="card"><b>Short for your schedule</b><div class="mut">'+(np?np+' '+CRK[g][1].toLowerCase()+' ('+money(pc)+')':'No extra pilots')+(nc?' · '+nc+' '+CRK[cg][1].toLowerCase()+' ('+money(cc)+')':'')+'</div></div>'
     +'<div class="row" style="gap:8px;margin-top:10px"><button class="pri" id="crp_ok">Hire '+money(pc+cc)+'</button><button id="crp_no">Not now</button></div>')}
 document.addEventListener('click',e=>{if(e.target.id==='crp_no'){ACX();CRP=null}else if(e.target.id==='crp_ok'&&CRP){const p=CRP;CRP=null;let ok=true;if(p.np)ok=crHire(p.g,p.np)&&ok;if(p.nc)ok=crHire(p.cg,p.nc)&&ok;ACX();render()}});
-(function(){const wrap=(name,get)=>{const f=window[name];if(typeof f!=='function')return;window[name]=function(...a){const x=get(a),n0=S.fleet.length+S.orders.length+(S.orders.reduce((s,o)=>s+(o.n||1),0)),r=f.apply(this,a),n1=S.fleet.length+S.orders.length+(S.orders.reduce((s,o)=>s+(o.n||1),0));
-  if(x&&n1>n0)try{crPrompt(x.t,x.seats,x.n||1,x.how)}catch(e){}return r}};
-  wrap('buy',a=>{const l=market_().find(z=>z.id===a[0]);return l&&{t:l.t,seats:l.t[3],n:1,how:'You bought it.'}});
-  wrap('leaseIt',a=>{const l=market_().find(z=>z.id===a[0]);return l&&{t:l.t,seats:l.t[3],n:1,how:'You leased it.'}});
-  wrap('order',a=>{const t=TY[a[0]];if(!t)return null;const n=a[1]||+(($('#q_'+a[0])||{}).value||1);return{t,seats:a[4]&&typeof cTot==='function'?cTot(a[4]):t[3],n,how:'You ordered it.'}})})();
+(function(){const f=window.createRoute;if(typeof f!=='function')return;window.createRoute=function(...a){const n0=S.routes.length,r=f.apply(this,a);if(S.routes.length>n0)try{crPrompt(S.routes[S.routes.length-1])}catch(e){}return r}})();
 
 /* v0.73 fleet planner: for each route, what the best aircraft and frequency would earn, plus idle and loss-making aircraft */
 let PLC={t:0,d:null};
