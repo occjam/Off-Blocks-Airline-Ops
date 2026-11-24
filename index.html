@@ -997,7 +997,7 @@ function acBar(f){const n=now(),di=dayIdx(n),ds=dayStart(di),pct=ms=>Math.max(0,
     seg+='<div title="'+l.o+'-'+l.d+' '+hhmm(l.dep)+'" style="position:absolute;left:'+a+'%;width:'+Math.max(.8,b-a)+'%;top:3px;bottom:3px;background:'+(l.dep<=n&&n<l.arr?'var(--teal)':l.arr<n?'#2b6b64':'#3b82a0')+';border-radius:3px"></div>'}));
   return '<div class="mut" style="font-size:11px;margin-top:6px">Today (UTC)</div><div style="position:relative;height:22px;background:var(--panel2);border-radius:5px;overflow:hidden;margin:3px 0 6px">'+seg+'<div style="position:absolute;top:0;bottom:0;left:'+pct(n)+'%;width:2px;background:var(--amber)"></div></div>'}
 function candidates(t,f){const out=[];Object.keys(AP).forEach(a=>{if(a===S.base)return;const p=PAIR[S.base+'|'+a];if(!p)return;const d=p[2];
-  if(d*1.05>t[9]||!lim(t,a)||seatsAt(t,S.base,d,f.seats||t[3])<=0||seatsAt(t,a,d,f.seats||t[3])<=0||['blocked','cabotage'].includes(trTier(AP[S.base].cc,AP[a].cc)))return;out.push([a,d,p[3]])});out.sort((x,y)=>y[2]-x[2]);return out}
+  if(d*1.05>t[9]||!lim(t,a)||seatsAt(t,S.base,d,f.seats||t[3])<=0||seatsAt(t,a,d,f.seats||t[3])<=0||['blocked','cabotage'].includes(trTier(AP[S.base].cc,AP[a].cc)))return;out.push([a,d,rtDemV(a,p[3]),p[3]])});out.sort((x,y)=>y[2]-x[2]);return out}
 function autoPlan(f,t){const key=NR.reg+'|'+NR.d+'|'+S.routes.length;NR.autoKey=key;NR.autoMsg='';if(!NR.d||AP[NR.d]==null)return;
   const mk=(dep,rt,days)=>({id:0,reg:f.reg,o:S.base,d:NR.d,dep,rt,dw:days.length,days,fare:100,created:0});
   const g=geom(mk(480,1,ALLD),t);if(!g)return;const others=S.routes.filter(o=>o.reg===f.reg);
@@ -1016,7 +1016,7 @@ function newRouteCard(free){
   let h='<div class="card" style="border-color:var(--teal)"><b>New route</b><span class="lab">Aircraft</span><select id="nr_reg" style="width:100%">'+free.map(x=>'<option value="'+x.reg+'"'+(x.reg===NR.reg?' selected':'')+'>'+x.reg+' · '+TY[x.code][1]+(()=>{const n=S.routes.filter(r=>r.reg===x.reg);return n.length?' · '+n.map(r=>r.d+(r.days&&r.days.length<7?' '+r.days.length+'/wk':'')).join(', '):' · idle'})()+'</option>').join('')+'</select>';
   const qq=(NR.q||'').trim().toLowerCase(),CF=qq?C.filter(c=>c[0].toLowerCase().includes(qq)||AP[c[0]].city.toLowerCase().includes(qq)):C;
   if(!C.length)return h+'<div class="mut rd" style="margin-top:8px">No reachable destinations with demand from '+S.base+' for this type.</div><div style="margin-top:8px"><button id="nr_x">Close</button></div></div>';
-  h+='<span class="lab">Destination (by daily demand)</span><input id="nr_q" type="search" placeholder="Search IATA code or city" autocomplete="off" autocapitalize="characters" value="'+(NR.q||'').replace(/"/g,'')+'" style="width:100%;margin-bottom:6px"><select id="nr_d" style="width:100%">'+CF.map(c=>'<option value="'+c[0]+'"'+(c[0]===NR.d?' selected':'')+'>'+c[0]+' '+AP[c[0]].city+' · '+c[1]+' nm · '+c[2].toLocaleString()+'/day'+(hasRights(c[0])?'':' · needs permit')+(trOk(S.base,c[0])?'':' · needs traffic rights')+(trTier(AP[S.base].cc,AP[c[0]].cc)==='blocked'?' · no rights possible':'')+'</option>').join('')+'</select>'+(qq&&!CF.length?'<div class="mut rd">No reachable airport matches "'+qq.toUpperCase()+'".</div>':'')+pickMap(C);
+  h+='<span class="lab">Destination (by daily demand)</span><input id="nr_q" type="search" placeholder="Search IATA code or city" autocomplete="off" autocapitalize="characters" value="'+(NR.q||'').replace(/"/g,'')+'" style="width:100%;margin-bottom:6px"><select id="nr_d" style="width:100%">'+CF.map(c=>'<option value="'+c[0]+'"'+(c[0]===NR.d?' selected':'')+'>'+c[0]+' '+AP[c[0]].city+' · '+c[1]+' nm · '+rtDemTxt(c)+(hasRights(c[0])?'':' · needs permit')+(trOk(S.base,c[0])?'':' · needs traffic rights')+(trTier(AP[S.base].cc,AP[c[0]].cc)==='blocked'?' · no rights possible':'')+'</option>').join('')+'</select>'+(qq&&!CF.length?'<div class="mut rd">No reachable airport matches "'+qq.toUpperCase()+'".</div>':'')+pickMap(C);
   h+=researchRows(qq);
   const d=nm(S.base,NR.d),ref=refFare(d,S.base,NR.d);if(NR.fm==null)NR.fm=1;
   const r={id:0,reg:NR.reg,o:S.base,d:NR.d,dep:NR.dep,rt:NR.rt,dw:ndw(),days:(NR.days||ALLD).slice(),fare:Math.round(ref*NR.fm),created:0},g=geom(r,t);
@@ -1028,7 +1028,7 @@ function newRouteCard(free){
   const e=econ(r,f,t,0,.5),e2=econ(r,f,t,1,.5),slot=slotCheck(r,t,0)||acConflict(r,f,0);
   const rev=(e.rev+e2.rev)*wkf(r),cost=(e.cost+e2.cost)*wkf(r);
   {const tb=rivTbl(S.base,NR.d,{ty:'',ac:t[0],fr:wkf(r)/7,tk:r.fare+psc(S.base),seats:Math.round((e.seats+e2.seats)/2),lf:(e.seats+e2.seats)?(e.pax+e2.pax)/(e.seats+e2.seats):0,pr:(e.rev+e2.rev-e.cost-e2.cost)/2});h=h.replace('<div id="nr_rv"></div>',tb)}
-  h+='<div class="g"><div><small>Block</small><b>'+Math.floor(g.b/60)+'h'+String(g.b%60).padStart(2,'0')+'</b></div><div><small>Seats out/back</small><b>'+e.seats+' / '+e2.seats+'</b></div><div><small>Pax out/back</small><b>'+e.pax+' / '+e2.pax+'</b></div><div><small>Revenue/day</small><b>'+usd(rev)+'</b></div><div><small>Cost/day</small><b>'+usd(cost)+'</b></div><div><small>Profit/day</small><b class="'+(rev-cost<0?'rd':'ok')+'">'+usd(rev-cost)+'</b></div></div>';
+  h+=rtGrid(g,e,e2,rev,cost);
   if(e.cxp||e2.cxp)h+='<div class="mut ok" style="margin-top:4px">Connecting passengers: '+e.cxp+' out, '+e2.cxp+' back per flight, already included above.</div>';
   const rs=(e.seats<(f.seats||t[3])?'Takeoff weight limits seats at '+S.base+' to '+e.seats+'. ':'')+(e2.seats<(f.seats||t[3])?'Limits seats at '+NR.d+' to '+e2.seats+'. ':'');
   h+='<div class="mut">Landing '+usd(land(NR.d)*t[5])+' at '+NR.d+' ('+usd(land(NR.d))+'/t). Passenger charge '+usd(psc(S.base))+' on top of fare. '+rs+'</div>';
@@ -2637,6 +2637,22 @@ function tySpec(t,fl){try{if(!fl&&!SPO[t[0]])return'<button data-spctg="'+t[0]+'
 document.addEventListener('click',e=>{const b=e.target.closest('[data-ordtg]');if(b){const i=b.dataset.ordtg;ORO[i]=!ORO[i];render()}const c=e.target.closest('[data-spctg]');if(c){const k=c.dataset.spctg;SPO[k]=!SPO[k];render()}});
 
 document.addEventListener('click',e=>{const b=e.target.closest('[data-ordnow]');if(!b)return;const o=S.orders[+b.dataset.ordnow],L=S.skipLeft==null?2:S.skipLeft;if(!o||L<1)return;S.skipLeft=L-1;o.due=now();log('Skipped the wait: '+TY[o.code][1]+' delivered immediately ('+S.skipLeft+' free skip'+(S.skipLeft===1?'':'s')+' left)');save();try{tick()}catch(x){}render();toast('Delivered. '+S.skipLeft+' free skip'+(S.skipLeft===1?'':'s')+' left')});
+
+/* ---------- route demand intel: bands until surveyed or level 5 ---------- */
+const RTLV=5;
+function rtKnown(d){try{if(lvLevel()>=RTLV)return true}catch(x){}const k=rkey(S.base,d);return !!((S.svy||{})[k]||((S.research||{})[k]&&S.research[k].done)||(S.routes||[]).some(r=>(r.o===S.base&&r.d===d)||(r.d===S.base&&r.o===d)))}
+function rtNoise(d){return .7+.6*rng(hs('rt|'+S.base+'|'+d))()}
+function rtDemV(d,v){return rtKnown(d)?v:v*rtNoise(d)}
+function rtBand(v){return v<300?'Low':v<1200?'Medium':v<4000?'High':'Very high'}
+function rtDemTxt(c){return rtKnown(c[0])?c[3].toLocaleString()+'/day':rtBand(c[2])+' demand'}
+function rtGrid(g,e,e2,rev,cost){const d=NR.d,K=rtKnown(d),n=K?1:rtNoise(d),R=rev*n,sv=Math.round(rcost(S.base,d)*.6*100)/100;
+  const rg=(a,b)=>'~'+usd(a)+' to '+usd(b),pr=rev-cost;
+  let h='<div class="g"><div><small>Block</small><b>'+Math.floor(g.b/60)+'h'+String(g.b%60).padStart(2,'0')+'</b></div><div><small>Seats out/back</small><b>'+e.seats+' / '+e2.seats+'</b></div>';
+  if(K)h+='<div><small>Pax out/back</small><b>'+e.pax+' / '+e2.pax+'</b></div><div><small>Revenue/day</small><b>'+usd(rev)+'</b></div><div><small>Cost/day</small><b>'+usd(cost)+'</b></div><div><small>Profit/day</small><b class="'+(pr<0?'rd':'ok')+'">'+usd(pr)+'</b></div></div>';
+  else{const lo=R*.8-cost,hi=R*1.2-cost;h+='<div><small>Pax out/back</small><b>~'+Math.round(e.pax*n*.8)+' to '+Math.round(e.pax*n*1.2)+'</b></div><div><small>Revenue/day</small><b>'+rg(R*.8,R*1.2)+'</b></div><div><small>Cost/day</small><b>'+usd(cost)+'</b></div><div><small>Profit/day</small><b class="'+(hi<0?'rd':lo>0?'ok':'am')+'">'+(hi<0?'likely a loss':lo>0?'likely profitable':'uncertain')+'</b></div></div>'
+    +'<div class="mut" style="margin-top:6px">Demand for '+S.base+' to '+d+' is only an estimate. Survey the market for exact figures, or reach level '+RTLV+' to see them for every route.</div><button data-svy="'+d+'" style="margin-top:6px"'+(S.cash<sv?' disabled':'')+'>Survey this market · '+money(sv)+'</button>'}
+  return h}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-svy]');if(!b)return;const d=b.dataset.svy,sv=Math.round(rcost(S.base,d)*.6*100)/100;if(S.cash<sv)return toast('Survey costs '+money(sv),1);S.svy=S.svy||{};S.svy[rkey(S.base,d)]=1;LG('Market research').cash-=sv;log('Surveyed '+S.base+' - '+d+' ('+money(sv)+')');save();toast('Exact demand unlocked for '+S.base+' to '+d);render()});
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');if(ps_){S.pos=ps_.dataset.pos;save();render();return}
