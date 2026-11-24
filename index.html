@@ -2140,7 +2140,15 @@ function crPrompt(r){if(!S.crew||S.crew.auto)return;const f=S.fleet.find(x=>x.re
   const pc=CRK[g][3]*np,cc=CRK[cg][3]*nc;AO('<h3>Crew for '+r.o+'-'+r.d+'</h3><div class="mut" style="margin:6px 0">Sized to the flying you have scheduled, not the aircraft\'s maximum. Add routes later and the number grows; Auto-hire in Crew does this for you. Nothing is hired unless you accept. Training takes '+fmtD(2*S.ratio*MIN)+' for pilots'+(nc?' and '+fmtD(S.ratio*MIN)+' for cabin crew':'')+'.</div>'
     +'<div class="card"><b>Short for your schedule</b><div class="mut">'+(np?np+' '+CRK[g][1].toLowerCase()+' ('+money(pc)+')':'No extra pilots')+(nc?' · '+nc+' '+CRK[cg][1].toLowerCase()+' ('+money(cc)+')':'')+'</div></div>'
     +'<div class="row" style="gap:8px;margin-top:10px"><button class="pri" id="crp_ok">Hire '+money(pc+cc)+'</button><button id="crp_no">Not now</button></div>')}
-document.addEventListener('click',e=>{if(e.target.id==='crp_no'){ACX();CRP=null}else if(e.target.id==='crp_ok'&&CRP){const p=CRP;CRP=null;let ok=true;if(p.np)ok=crHire(p.g,p.np)&&ok;if(p.nc)ok=crHire(p.cg,p.nc)&&ok;ACX();render()}});
+document.addEventListener('click',e=>{if(e.target.id==='crp_no'){ACX();CRP=null}else if(e.target.id==='crp_ok'&&CRP){const p=CRP;CRP=null;let ok=true;if(p.np)ok=crHire(p.g,p.np)&&ok;if(p.nc&&p.cg)ok=crHire(p.cg,p.nc)&&ok;ACX();render()}});
+/* delivery: the aircraft must be ferried, which needs pilots only. Spare pilots in the family pool fly it; hire only the shortfall */
+function crFerry(t,how){const g=crGrp(t),n=t[3]<=12?1:t[2]==='Wide'?3:2;crState();crDirty();const sp=Math.max(0,crSpare(g)||0),np=Math.max(0,n-sp);
+  if(!np){toast('Ferry crew: '+n+' pilot'+(n>1?'s':'')+' from your '+CRK[g][1].toLowerCase()+' pool');return}
+  CRP={g,cg:null,np,nc:0};const pc=CRK[g][3]*np;AO('<h3>Ferry crew for your '+t[1]+'</h3><div class="mut" style="margin:6px 0">'+how+' It needs '+n+' pilot'+(n>1?'s':'')+' to ferry it, no cabin crew. You have '+sp+' spare '+CRK[g][1].toLowerCase()+', so you are '+np+' short. Training takes '+fmtD(2*S.ratio*MIN)+'. Nothing is hired unless you accept.</div>'
+    +'<div class="row" style="gap:8px;margin-top:10px"><button class="pri" id="crp_ok">Hire '+np+' ('+money(pc)+')</button><button id="crp_no">Not now</button></div>')}
+(function(){const wrap=(name,get)=>{const f=window[name];if(typeof f!=='function')return;window[name]=function(...a){const x=get(a),n0=S.fleet.length,r=f.apply(this,a);if(x&&S.fleet.length>n0)try{crFerry(x.t,x.how)}catch(e){}return r}};
+  wrap('buy',a=>{const l=market_().find(z=>z.id===a[0]);return l&&{t:l.t,how:'You bought it.'}});
+  wrap('leaseIt',a=>{const l=market_().find(z=>z.id===a[0]);return l&&{t:l.t,how:'You leased it.'}})})();
 (function(){const f=window.createRoute;if(typeof f!=='function')return;window.createRoute=function(...a){const n0=S.routes.length,r=f.apply(this,a);if(S.routes.length>n0)try{crPrompt(S.routes[S.routes.length-1])}catch(e){}return r}})();
 
 /* v0.73 fleet planner: for each route, what the best aircraft and frequency would earn, plus idle and loss-making aircraft */
