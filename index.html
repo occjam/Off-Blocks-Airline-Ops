@@ -2685,12 +2685,14 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-hsell]');i
 /* ---------- advance bookings: 24 h booking window ---------- */
 const BKW=24*3600000;
 const BKL=5;
-function bkOrd(r,dep){const c0=r.created||0;if(dep-c0>30*DAY)return 99;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return 99;const g=geom(r,TY[f.code]);if(!g)return 99;let c=0;
-  for(let d=dayIdx(c0);d<=dayIdx(dep);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dp=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN;if(dp>=c0&&dp<dep){c++;if(c>=BKL)return BKL}}return c}
-const bkLaunch=(r,dep)=>bkOrd(r,dep)<BKL;
+let BKLC={k:'',t:0,set:null};
+function bkLaunchSet(){const fl=(S.stat&&S.stat.fl)||0;if(fl>=BKL)return null;const n=now(),key=fl+'|'+S.routes.length+'|'+S.fleet.length;if(BKLC.set&&BKLC.k===key&&n-BKLC.t<30000)return BKLC.set;
+  const all=[];S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;bkFlights(r,f,t,g,n,5*DAY).forEach(L=>all.push([L.dep,r.id]))});
+  all.sort((a,b)=>a[0]-b[0]);const set=new Set(all.slice(0,BKL-fl).map(x=>x[1]+'|'+x[0]));BKLC={k:key,t:n,set};return set}
+const bkLaunch=(r,dep)=>{const s=bkLaunchSet();return !!(s&&s.has(r.id+'|'+dep))};
 const bkSf=(r,dep)=>{if(bkLaunch(r,dep))return 1;const c=r.created||0,av=Math.max(0,Math.min(BKW,dep-c)),x=av/BKW;return .3+.7*Math.pow(x,.7)};
 const bkB=s=>1-Math.pow(1-Math.max(0,Math.min(1,s)),1.6);
-function bkApply(r,e,dep){if(bkLaunch(r,dep)){e.bk=1;e.launch=1;if(e.seats>0&&e.pax>0&&e.pax<e.seats){const kp=e.seats/e.pax;e.rev*=kp;if(e.cb)e.cost+=(e.cb.pxs+e.cb.cat)*(kp-1);e.pax=e.seats}return}const k=bkSf(r,dep);e.bk=k;if(k>=.999)return;e.pax=Math.round(e.pax*k);e.rev*=k;e.cxp=Math.round((e.cxp||0)*k);if(e.cb)e.cost-=(e.cb.pxs+e.cb.cat)*(1-k)}
+function bkApply(r,e,dep){if(((S.stat&&S.stat.fl)||0)<BKL){e.bk=1;e.launch=1;if(e.seats>0&&e.pax>0&&e.pax<e.seats){const kp=e.seats/e.pax;e.rev*=kp;if(e.cb)e.cost+=(e.cb.pxs+e.cb.cat)*(kp-1);e.pax=e.seats}return}const k=bkSf(r,dep);e.bk=k;if(k>=.999)return;e.pax=Math.round(e.pax*k);e.rev*=k;e.cxp=Math.round((e.cxp||0)*k);if(e.cb)e.cost-=(e.cb.pxs+e.cb.cat)*(1-k)}
 const BKC={};
 function bkExp(r,f,t,n){const c=BKC[r.id];if(c&&n-c.t<10*60000&&c.f===f.reg)return c;let a={rev:0,pax:0,seats:0};try{const e=econ(r,f,t,0,.5,n),e2=econ(r,f,t,1,.5,n);a={rev:(e.rev+e2.rev)/2,pax:(e.pax+e2.pax)/2,seats:(e.seats+e2.seats)/2}}catch(x){}return BKC[r.id]={t:n,f:f.reg,...a}}
 function bkFlights(r,f,t,g,n,hz){const out=[];for(let d=dayIdx(n)-1;d<=dayIdx(n+hz);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
