@@ -905,14 +905,14 @@ function ovView(){const n=now();let rev=0,cost=0,rts=0;
   if(!S.routes.length)h='<div class="card"><b>Get started</b><div class="mut">Buy or lease an aircraft in Market, then open Routes to start your first flight.</div><div class="row" style="margin-top:8px"><button data-t="used">Used aircraft</button><button data-t="routes" class="pri">Routes</button></div></div>'+h;
   return h}
 function progItems(){const n=now(),L=[];
-  S.orders.forEach(o=>{if(o.due>n)L.push({k:'Delivery',t:o.n+' x '+TY[o.code][1],s:'On order',due:o.due})});
+  S.orders.forEach(o=>{if(o.due>n)L.push({k:'Delivery',t:o.n+' x '+TY[o.code][1],s:'On order',due:o.due,oi:S.orders.indexOf(o)})});
   S.fleet.forEach(f=>{if(f.mx&&f.mx.until>n)L.push({k:'Maintenance',t:f.reg+' '+TY[f.code][0],s:mxName(f.mx),due:f.mx.until})});
   Object.keys(S.research||{}).forEach(k=>{const r=S.research[k];if(!r.done&&r.due>n)L.push({k:'Research',t:k.replace('|',' - '),s:'Market research',due:r.due})});
   Object.keys(S.apx||{}).forEach(a=>{const p=S.apx[a].proj;if(p&&p.due>n)L.push({k:'Airport project',t:a+' '+p.name,s:'Under construction',due:p.due})});
   return L.sort((a,b)=>a.due-b.due)}
 function progView(){const L=progItems();if(!L.length)return'<div class="card"><b>Nothing in progress</b><div class="mut">Aircraft orders, maintenance checks, market research and airport projects show here with their time remaining.</div></div>';
   const G={};L.forEach(x=>(G[x.k]=G[x.k]||[]).push(x));
-  return '<div class="mut" style="margin-bottom:6px">'+L.length+' item'+(L.length>1?'s':'')+' in progress. Soonest first.</div>'+Object.keys(G).map(k=>'<h3>'+k+' ('+G[k].length+')</h3>'+G[k].map(x=>'<div class="card" style="padding:9px 12px"><div class="row"><span><b>'+x.t+'</b><div class="mut">'+x.s+'</div></span><span class="badge cd" data-due="'+x.due+'"></span></div></div>').join('')).join('')}
+  return '<div class="mut" style="margin-bottom:6px">'+L.length+' item'+(L.length>1?'s':'')+' in progress. Soonest first.</div>'+Object.keys(G).map(k=>'<h3>'+k+' ('+G[k].length+')</h3>'+G[k].map(x=>x.oi!=null&&typeof ordCard==='function'?ordCard(x.oi):'<div class="card" style="padding:9px 12px"><div class="row"><span><b>'+x.t+'</b><div class="mut">'+x.s+'</div></span><span class="badge cd" data-due="'+x.due+'"></span></div></div>').join('')).join('')}
 function ipcUpd(){const e=document.getElementById('ipc');if(!e)return;const L=progItems();if(!L.length){e.style.display='none';return}const a=L[0];
   e.style.display='block';e.innerHTML='<button data-t="prog" style="display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;margin-top:6px;padding:6px 10px;background:#eef6f5;border:1px solid var(--teal);border-radius:10px;font-size:13px"><span><b>'+L.length+' in progress</b> · next: '+a.t+' ('+a.s.toLowerCase()+')</span><span class="cd" data-due="'+a.due+'"></span></button>'}
 function moreView(){const L=[['Aircraft catalog','All 95 types with runway grades, ground profiles and maintenance','https://claude.ai/artifact/WKW2tRHmyN3iWDXKoRd7FW'],['Airport database','4,007 airports, runway grades, weight limits and sector check','https://claude.ai/artifact/Hpgr94ve1uKYZRZRVzCKpx'],['Cabin configurator','Layouts and seat counts by type','https://claude.ai/artifact/E2NA9ZVE7hz6VzQ9549zQh'],['Pricing sandbox','Test fares against an AI competitor','https://claude.ai/artifact/NpniLbBzxpDzHXAQZMLT8f'],['Demand explorer','Population-based route demand','https://claude.ai/artifact/8UpK7xbDhgNJDEfwEFqPVM'],['Ground ops sim','Turnaround and crew prototype for MBJ','https://claude.ai/artifact/Jg7sJnnhPouuQEPu4Hqice']];
@@ -1124,7 +1124,7 @@ function P(lon,lat){if(MS.proj==='flat')return[MS.W/2+(lon-MS.cx)*MS.k,MS.H/2-(l
 function mapView(){const rs=S.routes.filter(r=>AP[r.o]&&AP[r.d]);
   const bt='style="background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px"';
   return '<div class="card" style="padding:0;overflow:hidden;position:relative"><div style="position:relative;width:100%;height:'+MAPH+';min-height:380px"><canvas id="mcv" style="position:absolute;inset:0;width:100%;height:100%;display:block;background:#05080c"></canvas><svg id="wm" viewBox="0 0 360 500" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none"></svg></div>'
-   +'<div style="position:absolute;right:8px;top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:75%"><button id="mproj" '+bt+'></button><button id="mstyle" '+bt+'></button><button id="mfit" '+bt+'>Fit routes</button><button id="mworld" '+bt+'>World</button><button id="mnight" '+bt+'>Day/night</button><button id="mrv" '+bt+'></button><button id="mspd" '+bt+'></button><button id="mwnd" '+bt+'></button></div>'
+   +'<div style="position:absolute;right:8px;top:8px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:78%"><div style="display:flex;gap:6px"><button id="mfit" '+bt+'>Fit</button><button id="mmenu" '+bt+'>Map options &#9662;</button></div><div id="mpanel" style="display:'+(MS.menu?'grid':'none')+';grid-template-columns:1fr 1fr;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 4px 18px rgba(0,0,0,.45)"><button id="mproj" '+bt+'></button><button id="mstyle" '+bt+'></button><button id="mworld" '+bt+'>World</button><button id="mnight" '+bt+'>Day/night</button><button id="mrv" '+bt+'></button><button id="mspd" '+bt+'></button><button id="mwnd" '+bt+'></button></div></div>'
    +'<div style="position:absolute;left:8px;top:8px;display:flex;flex-direction:column;gap:6px"><button id="mzi" '+bt+'>+</button><button id="mzo" '+bt+'>&minus;</button></div>'
    +'<div id="minfo" style="position:absolute;left:8px;right:8px;bottom:8px"></div></div><div id="mlist"></div>'+(rs.length?'':'<div class="mut">No routes yet. Tap an airport on the map, or use the Routes tab.</div>')}
 function mapLabels(){const p=$('#mproj'),s=$('#mstyle'),q=$('#mspd'),wq=$('#mwnd');if(wq){wq.textContent='Winds: '+(MS.wnd?'on':'off');wq.style.borderColor=MS.wnd?'#7dd3fc':''}if(q){q.textContent=MV.sp>1?'Time: ×'+MV.sp+' · +'+fmtD(MV.off):'Time: Live';q.style.borderColor=MV.sp>1?'#fbbf24':''}if(p)p.textContent=MS.proj==='flat'?'View: Flat':'View: Globe';if(s)s.textContent='Style: '+{dark:'Dark',sat:'Hybrid',ter:'Terrain'}[MS.style]}
@@ -1344,6 +1344,7 @@ let MRS=false;
 window.addEventListener('resize',()=>{if(tab==='map'&&$('#wm'))mapUpdate()});
 document.addEventListener('click',e=>{const id=e.target.id;
   if(id==='mfit')mapFit();
+  else if(id==='mmenu'){MS.menu=!MS.menu;const p=$('#mpanel');if(p)p.style.display=MS.menu?'grid':'none'}
   else if(id==='mworld'){MS.cx=0;MS.cy=MS.proj==='flat'?0:20;MS.k=kMin();MS.R=Math.min(MS.W,MS.H)*.42;mapClamp();mapUpdate()}
   else if(id==='mnight'){MS.night=MS.night?0:1;mapUpdate()}
   else if(id==='mrv'){MS.rv=MS.rv===0?1:0;mapUpdate()}
@@ -2587,6 +2588,29 @@ function ntfCard(){if(typeof Notification==='undefined')return'<div class="mut" 
 document.addEventListener('click',e=>{if(e.target.id!=='ntf_t')return;if(S.ntf){S.ntf=0;save();render();return}
   if(typeof Notification==='undefined')return;const on=()=>{S.ntf=1;save();render();try{new Notification('Off Blocks',{body:'Notifications are on.'})}catch(x){}};
   if(Notification.permission==='granted')on();else if(Notification.permission==='denied')toast('Blocked in browser settings',1);else Notification.requestPermission().then(p=>{if(p==='granted')on();else{toast('Permission not granted',1);render()}}).catch(()=>toast('Notifications unavailable here',1))});
+/* ---------- order details and show-on-map ---------- */
+const ordMf=t=>{const m=t[1].match(/^(De Havilland Canada|De Havilland|Airbus|Boeing|Embraer|Bombardier|ATR|Saab|Fokker|McDonnell Douglas|BAe|British Aerospace|Cessna|COMAC|Sukhoi|Tupolev|Antonov|Mitsubishi|Dornier|Beechcraft)/i);return m?m[1]:t[1].split(' ')[0]};
+const ordDt=ms=>{const d=new Date(ms),M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return d.getUTCDate()+' '+M[d.getUTCMonth()]+' '+String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')+' UTC'};
+const ordNm=(a,b)=>{const R=3440.065,r=Math.PI/180,dl=(b.lon-a.lon)*r,dp=(b.lat-a.lat)*r,x=Math.sin(dp/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dl/2)**2;return Math.round(2*R*Math.asin(Math.sqrt(x)))};
+function ordCard(i){const o=S.orders[i];if(!o)return'';try{dlvOrd(o)}catch(e){}const t=TY[o.code],n=now(),prod=n<o.fs,b=AP[S.base],A=o.from?{lat:o.from[1],lon:o.from[2]}:null,nm=A&&b?ordNm(A,b):0;
+  const kind=o.kind==='lease'?'Lease':o.kind==='own'?'Used purchase':'New order',who=o.kind==='lease'?(o.of&&o.of.les?o.of.les.n:'Lessor'):o.kind==='own'?'Used market seller':ordMf(t);
+  const pf=prod?0:Math.max(0,Math.min(1,(n-o.fs)/Math.max(1,o.due-o.fs))),pct=prod?Math.max(0,Math.min(1,(n-(o.fs-(o.kind?usedMs(t):leadMs(t))))/Math.max(1,(o.kind?usedMs(t):leadMs(t))))):pf;
+  const row=(a,v)=>'<div class="row" style="margin-top:3px;font-size:13px"><span class="mut">'+a+'</span><span style="text-align:right">'+v+'</span></div>';
+  return'<div class="card" style="padding:10px 12px"><div class="row"><span><b>'+o.n+' x '+t[1]+'</b><div class="mut">'+kind+' · '+(prod?(o.kind?'Being prepared':'In production'):'Ferry flight under way')+'</div></span><span class="badge cd" data-due="'+o.due+'"></span></div>'
+   +'<div style="height:6px;border-radius:3px;background:var(--line);margin-top:6px"><div style="height:6px;border-radius:3px;width:'+Math.round(pct*100)+'%;background:var(--teal)"></div></div>'
+   +row(o.kind==='lease'?'Lessor':o.kind==='own'?'Seller':'Manufacturer',who)
+   +(A?row(prod?(o.kind?'Preparing at':'Built at'):'Departed from',o.from[3]||o.from[0]):'')
+   +(A?row('Ferry',o.from[0]+' to '+S.base+(nm?' · '+nm.toLocaleString()+' nm':'')+(o.fm?' · '+fmtD(o.fm):'')):'')
+   +(prod&&o.fs?row('Ferry leaves',ordDt(o.fs)):'')
+   +row('Arrives',ordDt(o.due))
+   +(o.kind==='lease'?row('Payments','Lease payments start on delivery'):o.kind==='own'?row('Payment','Paid in full'):row('Deposit paid',money(o.dep||0))+row('Balance due on delivery',money(o.bal||0)))
+   +row('Registration',o.reg||'Assigned on delivery')+(o.cfg&&typeof cTxt==='function'?row('Cabin',cTxt(o.cfg)):'')
+   +'<div class="bar" style="margin-top:8px"><button data-ordmap="'+i+'" class="pri">Show on map</button></div></div>'}
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dataset.ordmap==null)return;const i=+b.dataset.ordmap,o=S.orders[i];if(!o)return;try{dlvOrd(o)}catch(x){}
+  const nav=document.querySelector('[data-t="map"]');if(nav)nav.click();else{tab='map';render()}
+  setTimeout(()=>{try{const base=AP[S.base],A=o.from?{lat:o.from[1],lon:o.from[2]}:null;if(!base||!A)return;MS.proj='flat';MS.cx=(A.lon+base.lon)/2;MS.cy=(A.lat+base.lat)/2;
+    const dl=Math.abs(A.lon-base.lon)+14,dp=Math.abs(A.lat-base.lat)+10;MS.k=Math.min((MS.W||360)/dl,(MS.H||500)/dp);mapClamp();mapUpdate();
+    setTimeout(()=>{MSEL={dl:'o'+i};mapInfo();mapUpdate()},250)}catch(x){}},350)});
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');if(ps_){S.pos=ps_.dataset.pos;save();render();return}
