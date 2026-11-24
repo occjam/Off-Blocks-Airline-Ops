@@ -317,7 +317,7 @@ const th=(t,rid)=>{rid=rid==null?'':rid;return'<div class="th t3" data-av="'+t[0
 function imgErr(i){const p=i.parentNode,t=TY[p.dataset.av];if(!t)return;if(!i.dataset.f){i.dataset.f=1;i.src='img/'+t[0]+'.webp';return}p.classList.remove('t3');p.innerHTML=sideSVG(t,LV())}
 function avFb(i,c){if(!i.dataset.f){i.dataset.f=1;i.src='img/'+c+'.webp';const x=document.getElementById('av2');if(x)x.remove();return}i.outerHTML=sideSVG(TY[c],LV())}
 function avOpen(c){const t=TY[c];if(!t)return;const o=document.createElement('div');o.className='ov';o.id='ov';
-  o.innerHTML='<div class="in"><div class="row"><div><span class="code">'+t[0]+'</span> <b>'+t[1]+'</b></div><button id="ov_x">Close</button></div><div class="mut">'+t[22]+' m long · '+t[21]+' m span · '+t[3]+' seats typical</div><div class="card" style="padding:0;overflow:hidden"><img style="width:100%;display:block" alt="'+t[1]+'" data-lvc="'+c+'|s|" src="'+lvSrc(c,'s',LV())+'" onerror="avFb(this,\''+c+'\')"></div>'+(typeof tySpec==='function'?tySpec(t):'')+'</div>';document.body.appendChild(o)}
+  o.innerHTML='<div class="in"><div class="row"><div><span class="code">'+t[0]+'</span> <b>'+t[1]+'</b></div><button id="ov_x">Close</button></div><div class="mut">'+t[22]+' m long · '+t[21]+' m span · '+t[3]+' seats typical</div><div class="card" style="padding:0;overflow:hidden"><img style="width:100%;display:block" alt="'+t[1]+'" data-lvc="'+c+'|s|" src="'+lvSrc(c,'s',LV())+'" onerror="avFb(this,\''+c+'\')"></div>'+(typeof tySpec==='function'?tySpec(t,1):'')+'</div>';document.body.appendChild(o)}
 function avClose(){const o=document.getElementById('ov');if(o)o.remove()}
 function scaleSVG(t,a){const r=TY.A320,Lm=Math.max(t[22],r[22]);const w=x=>'<div style="width:'+(x[22]/Lm*100).toFixed(1)+'%">'+sideSVG(x,x===r?'#7d91a4':a)+'</div>';return w(t)+(t[0]==='A320'?'':'<div style="opacity:.6;margin-top:6px">'+w(r)+'</div>')}
 const save=()=>{try{if(SK)localStorage.setItem(SK,JSON.stringify(S))}catch(e){}};
@@ -2600,19 +2600,23 @@ document.addEventListener('click',e=>{if(e.target.id!=='ntf_t')return;if(S.ntf){
 const ordMf=t=>{const m=t[1].match(/^(De Havilland Canada|De Havilland|Airbus|Boeing|Embraer|Bombardier|ATR|Saab|Fokker|McDonnell Douglas|BAe|British Aerospace|Cessna|COMAC|Sukhoi|Tupolev|Antonov|Mitsubishi|Dornier|Beechcraft)/i);return m?m[1]:t[1].split(' ')[0]};
 const ordDt=ms=>{const d=new Date(ms),M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return d.getUTCDate()+' '+M[d.getUTCMonth()]+' '+String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')+' UTC'};
 const ordNm=(a,b)=>{const R=3440.065,r=Math.PI/180,dl=(b.lon-a.lon)*r,dp=(b.lat-a.lat)*r,x=Math.sin(dp/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dl/2)**2;return Math.round(2*R*Math.asin(Math.sqrt(x)))};
+const ORO={};
 function ordCard(i){const o=S.orders[i];if(!o)return'';try{dlvOrd(o)}catch(e){}const t=TY[o.code],n=now(),prod=n<o.fs,b=AP[S.base],A=o.from?{lat:o.from[1],lon:o.from[2]}:null,nm=A&&b?ordNm(A,b):0;
   const kind=o.kind==='lease'?'Lease':o.kind==='own'?'Used purchase':'New order',who=o.kind==='lease'?(o.of&&o.of.les?o.of.les.n:'Lessor'):o.kind==='own'?'Used market seller':ordMf(t);
   const pf=prod?0:Math.max(0,Math.min(1,(n-o.fs)/Math.max(1,o.due-o.fs))),pct=prod?Math.max(0,Math.min(1,(n-(o.fs-(o.kind?usedMs(t):leadMs(t))))/Math.max(1,(o.kind?usedMs(t):leadMs(t))))):pf;
   const row=(a,v)=>'<div class="row" style="margin-top:3px;font-size:13px"><span class="mut">'+a+'</span><span style="text-align:right">'+v+'</span></div>';
   return'<div class="card" style="padding:10px 12px"><div class="row"><span><b>'+o.n+' x '+t[1]+'</b><div class="mut">'+kind+' · '+(prod?(o.kind?'Being prepared':'In production'):'Ferry flight under way')+'</div></span><span class="badge cd" data-due="'+o.due+'"></span></div>'
    +'<div style="height:6px;border-radius:3px;background:var(--line);margin-top:6px"><div style="height:6px;border-radius:3px;width:'+Math.round(pct*100)+'%;background:var(--teal)"></div></div>'
+   +'<div class="mut" style="margin-top:6px">'+(A?o.from[0]+' → '+S.base+' · ':'')+'arrives '+ordDt(o.due)+'</div>'
+   +'<button data-ordtg="'+i+'" style="margin-top:6px;width:100%">'+(ORO[i]?'Hide details ▴':'Details ▾')+'</button>'
+   +(ORO[i]?(''
    +row(o.kind==='lease'?'Lessor':o.kind==='own'?'Seller':'Manufacturer',who)
    +(A?row(prod?(o.kind?'Preparing at':'Built at'):'Departed from',o.from[3]||o.from[0]):'')
    +(A?row('Ferry',o.from[0]+' to '+S.base+(nm?' · '+nm.toLocaleString()+' nm':'')+(o.fm?' · '+fmtD(o.fm):'')):'')
    +(A&&dlvStops(o).length?row('Fuel stop'+(dlvStops(o).length>1?'s':''),dlvStops(o).map(k=>k+' · '+AP[k].city).join('<br>')):'')+(prod&&o.fs?row('Ferry leaves',ordDt(o.fs)):'')
    +row('Arrives',ordDt(o.due))
    +(o.kind==='lease'?row('Payments','Lease payments start on delivery'):o.kind==='own'?row('Payment','Paid in full'):row('Deposit paid',money(o.dep||0))+row('Balance due on delivery',money(o.bal||0)))
-   +row('Registration',o.reg||'Assigned on delivery')+(o.cfg&&typeof cTxt==='function'?row('Cabin',cTxt(o.cfg)):'')
+   +row('Registration',o.reg||'Assigned on delivery')+(o.cfg&&typeof cTxt==='function'?row('Cabin',cTxt(o.cfg)):'')):'')
    +'<div class="bar" style="margin-top:8px"><button data-ordmap="'+i+'" class="pri">Show on map</button></div></div>'}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dataset.ordmap==null)return;const i=+b.dataset.ordmap,o=S.orders[i];if(!o)return;try{dlvOrd(o)}catch(x){}
   const nav=document.querySelector('[data-t="map"]');if(nav)nav.click();else{tab='map';render()}
@@ -2620,9 +2624,12 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||
     const dl=Math.abs(A.lon-base.lon)+14,dp=Math.abs(A.lat-base.lat)+10;MS.k=Math.min((MS.W||360)/dl,(MS.H||500)/dp);mapClamp();mapUpdate();
     setTimeout(()=>{MSEL={dl:'o'+i};mapInfo();mapUpdate()},250)}catch(x){}},350)});
 
-function tySpec(t){try{const b=AP[S.base];let rr='';if(b&&S.routes&&S.routes.length&&typeof dlvHav==='function'){let mx=0,mk='';S.routes.forEach(r=>{const a=AP[r.o],d=AP[r.d];if(a&&d){const x=dlvHav(a,d);if(x>mx){mx=x;mk=r.o+'-'+r.d}}});if(mx)rr='<div class="mut" style="margin-top:4px">Your longest route '+mk+' ('+Math.round(mx).toLocaleString()+' nm): '+(mx<=t[9]*.9?'<span class="ok">within range</span>':mx<=t[9]?'<span class="am">at the limit of its range</span>':'<span class="rd">beyond its range</span>')+'</div>'}
+const SPO={};
+function tySpec(t,fl){try{if(!fl&&!SPO[t[0]])return'<button data-spctg="'+t[0]+'" style="margin-top:6px;width:100%">Specs ▾</button>';const b=AP[S.base];let rr='';if(b&&S.routes&&S.routes.length&&typeof dlvHav==='function'){let mx=0,mk='';S.routes.forEach(r=>{const a=AP[r.o],d=AP[r.d];if(a&&d){const x=dlvHav(a,d);if(x>mx){mx=x;mk=r.o+'-'+r.d}}});if(mx)rr='<div class="mut" style="margin-top:4px">Your longest route '+mk+' ('+Math.round(mx).toLocaleString()+' nm): '+(mx<=t[9]*.9?'<span class="ok">within range</span>':mx<=t[9]?'<span class="am">at the limit of its range</span>':'<span class="rd">beyond its range</span>')+'</div>'}
   const e=b?eff(S.base):0;
-  return'<div class="g" style="margin-top:6px"><div><small>Range</small><b>'+t[9].toLocaleString()+' nm</b></div><div><small>Cruise</small><b>'+t[8]+' kt</b></div><div><small>Fuel burn</small><b>'+t[7].toLocaleString()+' kg/h</b></div><div><small>Runway needed</small><b>'+t[11].toLocaleString()+' m</b></div><div><small>Length / span</small><b>'+t[22]+' / '+t[21]+' m</b></div><div><small>'+(b?S.base+' runway':'Runway')+'</small><b>'+(b?Math.round(e).toLocaleString()+' m':'n/a')+'</b></div></div>'+rr}catch(x){return''}}
+  return(fl?'':'<button data-spctg="'+t[0]+'" style="margin-top:6px;width:100%">Hide specs ▴</button>')+'<div class="g" style="margin-top:6px"><div><small>Range</small><b>'+t[9].toLocaleString()+' nm</b></div><div><small>Cruise</small><b>'+t[8]+' kt</b></div><div><small>Fuel burn</small><b>'+t[7].toLocaleString()+' kg/h</b></div><div><small>Runway needed</small><b>'+t[11].toLocaleString()+' m</b></div><div><small>Length / span</small><b>'+t[22]+' / '+t[21]+' m</b></div><div><small>'+(b?S.base+' runway':'Runway')+'</small><b>'+(b?Math.round(e).toLocaleString()+' m':'n/a')+'</b></div></div>'+rr}catch(x){return''}}
+
+document.addEventListener('click',e=>{const b=e.target.closest('[data-ordtg]');if(b){const i=b.dataset.ordtg;ORO[i]=!ORO[i];render()}const c=e.target.closest('[data-spctg]');if(c){const k=c.dataset.spctg;SPO[k]=!SPO[k];render()}});
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');if(ps_){S.pos=ps_.dataset.pos;save();render();return}
