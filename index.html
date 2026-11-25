@@ -2707,14 +2707,14 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-hsell]');i
   const c=S.hubCost[a]||0,n=S.routes.filter(r=>r.o===a).length;HSC=null;if((S.hubs||[]).length<2||a===S.base||!c||n)return render();
   const p=c*.7;S.hubs=S.hubs.filter(x=>x!==a);delete S.hubCost[a];delete S.hubDue[a];LG('Hub sales').cash+=p;log('Sold hub '+a+' for '+money(p));save();toast('Hub sold: '+money(p));render()});
 /* ---------- advance bookings: 24 h booking window ---------- */
-const BKW=24*3600000;
+const BKW=24*3600000,BKCL=45*60000;
 const BKL=5;
 let BKLC={k:'',t:0,set:null};
 function bkLaunchSet(){const fl=(S.stat&&S.stat.fl)||0;if(fl>=BKL)return null;const n=now(),key=fl+'|'+S.routes.length+'|'+S.fleet.length;if(BKLC.set&&BKLC.k===key&&n-BKLC.t<30000)return BKLC.set;
   const all=[];S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;bkFlights(r,f,t,g,n,5*DAY).forEach(L=>all.push([L.dep,r.id]))});
   all.sort((a,b)=>a[0]-b[0]);const set=new Set(all.slice(0,BKL-fl).map(x=>x[1]+'|'+x[0]));BKLC={k:key,t:n,set};return set}
 const bkLaunch=(r,dep)=>{const s=bkLaunchSet();return !!(s&&s.has(r.id+'|'+dep))};
-const bkSf=(r,dep)=>{if(bkLaunch(r,dep))return 1;const c=r.created||0,av=Math.max(0,Math.min(BKW,dep-c)),x=av/BKW;return .3+.7*Math.pow(x,.7)};
+const bkSf=(r,dep)=>{if(bkLaunch(r,dep))return 1;const c=r.created||0,av=Math.max(0,Math.min(BKW,dep-BKCL-c)),x=av/BKW;return .3+.7*Math.pow(x,.7)};
 const bkB=s=>1-Math.pow(1-Math.max(0,Math.min(1,s)),1.6);
 function bkApply(r,e,dep){if(((S.stat&&S.stat.fl)||0)<BKL){e.bk=1;e.launch=1;if(e.seats>0&&e.pax>0&&e.pax<e.seats){const kp=e.seats/e.pax;e.rev*=kp;if(e.cb)e.cost+=(e.cb.pxs+e.cb.cat)*(kp-1);e.pax=e.seats}return}const k=bkSf(r,dep);e.bk=k;if(k>=.999)return;e.pax=Math.round(e.pax*k);e.rev*=k;e.cxp=Math.round((e.cxp||0)*k);if(e.cb)e.cost-=(e.cb.pxs+e.cb.cat)*(1-k)}
 const BKC={};
@@ -2722,7 +2722,7 @@ function bkExp(r,f,t,n){const c=BKC[r.id];if(c&&n-c.t<10*60000&&c.f===f.reg)retu
 function bkFlights(r,f,t,g,n,hz){const out=[];for(let d=dayIdx(n)-1;d<=dayIdx(n+hz);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
   const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN,id=r.id+':'+d+':'+k+':'+dir;
   if(arr>n&&dep<=n+hz&&dep>=r.created&&!(S.early&&S.early[id]))out.push({dep,arr,dir,id})}return out}
-function bkShare(r,dep,n){if(n>=dep)return 1;const w0=Math.max(r.created||0,dep-BKW);if(n<=w0)return 0;return bkB((n-w0)/(dep-w0))}
+function bkShare(r,dep,n){const cl=dep-BKCL;if(n>=cl)return 1;const w0=Math.max(r.created||0,dep-BKW);if(n<=w0||cl<=w0)return 0;return bkB((n-w0)/(cl-w0))}
 function bkAdv(n){let A=0;S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const ex=bkExp(r,f,t,n);
   bkFlights(r,f,t,g,n,BKW).forEach(L=>{A+=ex.rev*bkSf(r,L.dep)*bkShare(r,L.dep,n)*ffFac(L.id)})});return A}
 function bkTick(n){if(!S.routes||!S.routes.length){S.advA=0;return false}if(S.bkT&&n-S.bkT<30000)return false;S.bkT=n;const A=bkAdv(n);
@@ -2751,7 +2751,7 @@ function ffProj(r,f,t,L,m){const e=econ(r,f,t,L.dir,rng(hs(L.id))(),L.dep);bkApp
 function ffFac(id){const s=ffSeg(id);if(!s)return 1;let a=0;s.forEach((x,i)=>{const w=(i<s.length-1?s[i+1][0]:1)-x[0];a+=w*x[1]*Math.exp(-FFK*(x[1]-1))});return a}
 function ffAuto(n){if(S.spT&&n-S.spT<10*60000)return false;S.spT=n;let ch=false;
   S.routes.forEach(r=>{const lv=r.sp|0;if(!lv)return;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const lim=FFL[lv-1],seats=f.seats||t[3];
-    bkFlights(r,f,t,g,n,BKW).forEach(L=>{if(L.dep<n+20*60000||bkLaunch(r,L.dep))return;const E=S.ff&&S.ff[L.id];if(E&&E.lock)return;const Db=ffDb(r,L.id,L.dep);if(!Db)return;
+    bkFlights(r,f,t,g,n,BKW).forEach(L=>{if(L.dep<n+BKCL||bkLaunch(r,L.dep))return;const E=S.ff&&S.ff[L.id];if(E&&E.lock)return;const Db=ffDb(r,L.id,L.dep);if(!Db)return;
       let tg=Db>seats?1+Math.log(Db/seats)/FFK:1;tg=Math.round(Math.max(lim[0],Math.min(lim[1],tg))*20)/20;const cur=ffCur(L.id);if(Math.abs(tg-cur)>=.05){ffSet(r,L.id,L.dep,tg,1);ch=true}})});
   if(S.ff){const d0=dayIdx(n)-3;for(const k in S.ff){const d=+k.split(':')[1];if(d<d0)delete S.ff[k]}}return ch}
 const FFO={};
@@ -2766,7 +2766,7 @@ function ffCard(r,f,t,g,n){const fl=bkFlights(r,f,t,g,n,BKW*1.2).filter(x=>x.dep
 document.addEventListener('click',e=>{let b=e.target.closest('[data-ffo]');if(b){FFO[b.dataset.ffo]=!FFO[b.dataset.ffo];render();return}
   b=e.target.closest('[data-spr]');if(b){const [id,v]=b.dataset.spr.split('|'),r=S.routes.find(x=>x.id==id);if(r){r.sp=+v;S.spT=0;if(!+v&&S.ff){for(const k in S.ff){const E=S.ff[k];if(k.split(':')[0]==id&&E.a&&E.dp>now()){ffSet(r,k,E.dp,1,0);E.lock=0;E.a=0}}}
       save();render()}return}
-  b=e.target.closest('[data-ffm]');if(b){const [id,d,rid,dep]=b.dataset.ffm.split('|'),r=S.routes.find(x=>x.id==rid);if(!r)return;const cur=ffCur(id),m=+d===0?1:Math.max(.5,Math.min(2,Math.round(cur*(1+d/100)*100)/100));ffSet(r,id,+dep,m,0);save();render()}});
+  b=e.target.closest('[data-ffm]');if(b){const [id,d,rid,dep]=b.dataset.ffm.split('|'),r=S.routes.find(x=>x.id==rid);if(!r)return;if(+dep<now()+BKCL)return toast('Bookings closed at check-in close',1);const cur=ffCur(id),m=+d===0?1:Math.max(.5,Math.min(2,Math.round(cur*(1+d/100)*100)/100));ffSet(r,id,+dep,m,0);save();render()}});
 /* ---------- generative in-game music (no audio files) ---------- */
 const MUSX={ctx:null,m:null,rv:null,t:0,beat:0,bar:0,timer:null,on:false};
 const MUSST={calm:{n:'Calm',bpm:66,wave:'triangle',pad:900,ch:[[0,4,7,11],[-3,0,4,7],[-7,-3,0,4],[-5,-1,2,7]],sc:[0,2,4,7,9],arp:.55,perc:0},
