@@ -425,6 +425,11 @@ function pairDemand(r){const fleetOf=x=>S.fleet.find(f=>f.reg===x.reg);
   const D=market(pool,ref+tax,{fare:fa/fr+tax,freq:fr,otp:otpNow(),seats:sd/fr,brand:PSN().brand},cps);
   return{perFlight:D[0]/fr,share:D[0],pool,ref,cf,cs}}
 function geom(r,t){const d=nm(r.o,r.d);if(d==null)return null;const b=blockMin(d,t),turn=t[20];return{d,b,turn,cyc:2*b+2*turn}}
+const rdp=(r,g,k)=>r.deps&&r.deps[k]!=null?r.deps[k]:r.dep+k*g.cyc;
+function xDeps(X,r){if(!X||!X.cust||X.rt<2)return undefined;const f=S.fleet.find(x=>x.reg===r.reg),g=f&&geom(r,TY[f.code]);if(!g)return undefined;return Array.from({length:X.rt},(_,k)=>k===0?X.dep:(X.dd&&X.dd[k]!=null?X.dd[k]:X.dep+k*g.cyc))}
+function turnsUI(X,pre,r){if(!X||X.rt<2)return'';const dp=xDeps(X,r),f=S.fleet.find(x=>x.reg===r.reg),g=f&&geom(r,TY[f.code]);let h='<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap;justify-content:flex-start"><button data-tc="'+pre+'|t">'+(X.cust?'Back to back':'Choose each departure')+'</button>'+(X.cust?'<button data-tc="'+pre+'|sp">Spread evenly</button>':'')+'</div>';
+  if(X.cust&&dp)h+=dp.map((v,k)=>{if(!k)return'';const m=((v%1440)+1440)%1440,H=Math.floor(m/60),M=m%60,ms=[...new Set([0,5,10,15,20,25,30,35,40,45,50,55,M])].sort((a,b)=>a-b);return'<div class="row" style="margin-top:6px"><span class="mut">Round trip '+(k+1)+' departs</span><span class="bar" style="margin:0"><select data-tt="'+pre+'|'+k+'|h">'+[...Array(24).keys()].map(x=>'<option value="'+x+'"'+(x===H?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select data-tt="'+pre+'|'+k+'|m">'+ms.map(x=>'<option value="'+x+'"'+(x===M?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select></span></div>'}).join('')+(g?'<div class="mut" style="font-size:12px;margin-top:4px">Each round trip takes '+fmtD(g.cyc*MIN)+' including turnaround, so keep departures at least that far apart.</div>':'');
+  return h}
 const REGP={CAR:{n:'Caribbean',crew:.85,mx:.9,fuel:1.05,cash:1},CAM:{n:'Central America',crew:.75,mx:.85,fuel:1.05,cash:.9},SAM:{n:'South America',crew:.7,mx:.8,fuel:1,cash:.9},NAM:{n:'North America',crew:1.45,mx:1.25,fuel:.95,cash:1.8},EUR:{n:'Europe',crew:1.3,mx:1.2,fuel:1.05,cash:1.7},ME:{n:'Middle East',crew:.9,mx:.9,fuel:.85,cash:1.3},AFR:{n:'Africa',crew:.7,mx:.85,fuel:1.1,cash:.9},ASIA:{n:'Asia',crew:.65,mx:.8,fuel:1,cash:1.1},OCE:{n:'Oceania',crew:1.35,mx:1.2,fuel:1.1,cash:1.6},GEN:{n:'Worldwide',crew:1,mx:1,fuel:1,cash:1}};
 const rgp=a=>REGP[AP[a]?wreg(AP[a].cc):'GEN']||REGP.GEN;
 const POS={lcc:{n:'Low-cost',brand:-.18,pxs:14,cat:0,anc:9,crew:.92,ovh:.12,d:'Lowest fares and fast turns. Ancillary fees add about $9 per passenger and sales costs are lower, but business travellers and quality-sensitive passengers pass you by.'},hyb:{n:'Hybrid',brand:0,pxs:20,cat:0,anc:0,crew:1,ovh:.18,d:'The balanced default: a standard product with the usual costs.'},full:{n:'Full-service',brand:.35,pxs:28,cat:6,anc:0,crew:1.05,ovh:.2,d:'Better product, meals and cabins. Business and premium passengers choose you over equal-priced rivals, but each passenger costs more to serve and you must win on frequency, punctuality and routes the budget carriers avoid.'}};
@@ -701,10 +706,10 @@ function cancelOrder(i){S.orders.splice(i,1);save();toast('Order cancelled, depo
 /* ---------- slots ---------- */
 function usage(a,skipId){const u=new Array(24).fill(0);
   S.routes.forEach(r=>{if(r.id===skipId||(r.o!==a&&r.d!==a))return;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const g=geom(r,TY[f.code]);
-    for(let k=0;k<r.rt;k++){const m0=r.dep+k*g.cyc;const ev=[[m0,r.o],[m0+g.b,r.d],[m0+g.b+g.turn,r.d],[m0+2*g.b+g.turn,r.o]];
+    for(let k=0;k<r.rt;k++){const m0=rdp(r,g,k);const ev=[[m0,r.o],[m0+g.b,r.d],[m0+g.b+g.turn,r.d],[m0+2*g.b+g.turn,r.o]];
       ev.forEach(([m,ap])=>{if(ap===a)u[Math.floor(((m%1440)+1440)%1440/60)]++})}});return u}
 function slotCheck(r,t,skipId){const g=geom(r,t);if(!g)return'No route data';
-  for(let k=0;k<r.rt;k++){const m0=r.dep+k*g.cyc;const ev=[[m0,r.o],[m0+g.b,r.d],[m0+g.b+g.turn,r.d],[m0+2*g.b+g.turn,r.o]];
+  for(let k=0;k<r.rt;k++){const m0=rdp(r,g,k);const ev=[[m0,r.o],[m0+g.b,r.d],[m0+g.b+g.turn,r.d],[m0+2*g.b+g.turn,r.o]];
     for(const [m,a] of ev){const h=Math.floor(((m%1440)+1440)%1440/60);const used=usage(a,skipId)[h];const extra=ev.filter(([m2,a2])=>a2===a&&Math.floor(((m2%1440)+1440)%1440/60)===h).length;
       if(aiUse(a,h)+used+extra>capOf(a)+1e-9)return'No slot at '+a+' around '+String(h).padStart(2,'0')+':00 (capacity '+capOf(a)+'/h)'}}
   if(r.rt*g.cyc>1440)return'Rotation too long: '+r.rt+' round trips need '+fmtD(r.rt*g.cyc*MIN)+' of a 24 h day';return null}
@@ -740,7 +745,7 @@ function runLeg(L){const {r,f,t,g,dep,arr,dir}=L;if(!S.fleet.includes(f)||!S.rou
 function settle(n){const from=Math.max(S.sim,n-14*DAY);const legs=[];
   S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;
     for(let d=dayIdx(from)-1;d<=dayIdx(n);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
-      const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN;
+      const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN;
       const id=r.id+':'+d+':'+k+':'+dir;if(arr>from&&arr<=n&&dep>=r.created&&!(S.early&&S.early[id]))legs.push({r,f,t,g,dep,arr,dir,id})}});
   legs.sort((a,b)=>a.dep-b.dep);legs.forEach(runLeg);S.sim=n;if(S.early)for(const k in S.early)if(S.early[k]<n-16*DAY)delete S.early[k];return legs.length}
 (function(){if(!S.utc){S.utc=1;(S.routes||[]).forEach(r=>{r.dep=(r.dep||0)+300})}})();
@@ -749,7 +754,7 @@ const DEV=/[?&]dev=1/.test(location.search)||(()=>{try{return localStorage.getIt
 function completeNext(id){const r=S.routes.find(x=>x.id==id),f=r&&S.fleet.find(x=>x.reg===r.reg);if(!r||!f)return toast('Route has no aircraft',1);
   const n=now();if(f.mx&&n<f.mx.until)return toast(f.reg+' is in maintenance',1);const t=TY[f.code],g=geom(r,t);if(!g)return toast('Route not flyable',1);
   S.early=S.early||{};let best=null;
-  for(let d=dayIdx(n)-1;d<=dayIdx(n)+2;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN,lid=r.id+':'+d+':'+k+':'+dir;
+  for(let d=dayIdx(n)-1;d<=dayIdx(n)+2;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN,lid=r.id+':'+d+':'+k+':'+dir;
     if(dep>=r.created&&arr>n&&!S.early[lid]&&(!best||arr<best.arr))best={r,f,t,g,dep,arr,dir,id:lid}}
   if(!best)return toast('No upcoming flight to complete',1);
   const c0=S.cash;runLeg(best);S.early[best.id]=best.arr;save();const d=S.cash-c0;
@@ -789,15 +794,15 @@ function status(f){const rs=S.routes.filter(x=>x.reg===f.reg),n=now();
   let last=null,nx=null;
   for(const r of rs){const t=TY[f.code],g=geom(r,t);if(!g)continue;
     for(let d=dayIdx(n)-1;d<=dayIdx(n)+2;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
-      const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN;if(dep<r.created)continue;
+      const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN;if(dep<r.created)continue;
       if(S.early&&S.early[r.id+':'+d+':'+k+':'+dir]){if(arr>=n-DAY&&(!last||n>last.arr))last={arr:n,at:dir?r.o:r.d};continue}
       if(d>dayIdx(n))continue;
       if(dep<=n&&n<arr)return{txt:'Airborne '+(dir?r.d+' to '+r.o:r.o+' to '+r.d)+', lands in '+fmtD(arr-n),cls:'ok',air:1};
       if(arr<=n&&(!last||arr>last.arr))last={arr,at:dir?r.o:r.d}}
-    for(let d=dayIdx(n);d<=dayIdx(n)+7;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN;if(dep>n&&dep>=r.created&&!(S.early&&S.early[r.id+':'+d+':'+k+':'+dir])&&(!nx||dep<nx))nx=dep}}
+    for(let d=dayIdx(n);d<=dayIdx(n)+7;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN;if(dep>n&&dep>=r.created&&!(S.early&&S.early[r.id+':'+d+':'+k+':'+dir])&&(!nx||dep<nx))nx=dep}}
   return{txt:'On ground at '+(last?last.at:rs[0].o)+(nx?' · next departure '+hhmm(nx)+' (in '+fmtD(nx-n)+')':''),cls:''}}
 /* one aircraft, several routes: check weekly timetable for overlaps */
-function wkIv(r,t){const g=geom(r,t),out=[];if(!g)return out;for(let d=0;d<7;d++){if(!opdW(r,d))continue;for(let k=0;k<r.rt;k++){const s=d*1440+r.dep+k*g.cyc;out.push([s,s+2*g.b+2*g.turn,r.o+'-'+r.d])}}return out}
+function wkIv(r,t){const g=geom(r,t),out=[];if(!g)return out;for(let d=0;d<7;d++){if(!opdW(r,d))continue;for(let k=0;k<r.rt;k++){const s=d*1440+rdp(r,g,k);out.push([s,s+2*g.b+2*g.turn,r.o+'-'+r.d])}}return out}
 function acConflict(r,f,skipId){const t=TY[f.code],mine=wkIv(r,t),W=10080;
   for(const o of S.routes){if(o.reg!==f.reg||o.id===skipId)continue;if(o.o!==r.o)return'Already flies from '+o.o+': an aircraft can only work one hub';
     for(const a of wkIv(o,t))for(const b of mine)for(const sh of [-W,0,W])if(a[0]<b[1]+sh&&b[0]+sh<a[1]){const F=m=>{m=((m%W)+W)%W;return WD[Math.floor(m/1440)]+' '+mm2(m)};return 'Clashes with its '+o.o+'-'+o.d+' flights: they are away '+F(a[0])+' to '+F(a[1])+' UTC, and this one would be away '+F(b[0]+sh)+' to '+F(b[1]+sh)+' UTC. Change the departure time, round trips or days.'}}
@@ -930,7 +935,7 @@ function moreView(){const L=[['Aircraft catalog','All 95 types with runway grade
   return (typeof bkCard==='function'?bkCard():'')+'<div class="mut" style="margin:10px 0 6px">Reference tools. They run separately and do not change your game.</div>'+L.map(l=>'<a href="'+l[2]+'" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card"><b>'+l[0]+'</b><div class="mut">'+l[1]+'</div></div></a>').join('')+'<div class="card"><b>Credits</b><div class="mut">Boeing 737 MAX 8 render is based on "Boeing 737 MAX 8" (https://skfb.ly/pwRzN) by Dlourine, licensed under CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/). Livery added by this project.<br>C919 render is based on "C919 B" by juarturo (https://sketchfab.com/3d-models), licensed under CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/). Livery added by this project.<br>This work is based on "Fokker 50 klm" (https://sketchfab.com/3d-models/fokker-50-klm-5a88c652a06243f18724a2270a1645bc) by zairiqzairiq (https://sketchfab.com/zairiqzairiq) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Repainted by this project.<br>Cessna 208: "Cessna 208" (https://sketchfab.com/3d-models/cessna-208-2759f3b519904924bb09d02bd961a308) by Dave Love SketchFab (https://sketchfab.com/Tyler_Dave), CC-BY-4.0. L410: "L410" (https://sketchfab.com/3d-models/l410-51a8372f36d845f4a15324207b817b4a) by manilov.ap (https://sketchfab.com/manilov.ap), CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Repainted by this project.<br>Tu-154: "Tu154" (https://sketchfab.com/manilov.ap) by manilov.ap, CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Repainted by this project.<br>Most airliner renders (737, 747, 767, 777, 787, A300/A320/A330/A340/A350/A380 families, CSeries, CRJ, E-Jets, Dash 8, ATR, Saab 340, Twin Otter) are based on FSLTL traffic base models by FAIB, TFS and other freeware creators, used as private placeholders; liveries added by this project.</div></div>'}
 let TL=null;
 function tlTarget(r){const f=S.fleet.find(x=>x.reg===r.reg),g=geom(r,TY[f.code]),n=now();let best=null;
-  for(let d=dayIdx(n)-1;d<=dayIdx(n)+1;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++){const dep=dayStart(d)+(r.dep+k*g.cyc+(g.b+g.turn)*1)*MIN,arr=dep+g.b*MIN;if(dep>=r.created&&arr>n&&(!best||arr<best))best=arr}return best}
+  for(let d=dayIdx(n)-1;d<=dayIdx(n)+1;d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++){const dep=dayStart(d)+(rdp(r,g,k)+(g.b+g.turn)*1)*MIN,arr=dep+g.b*MIN;if(dep>=r.created&&arr>n&&(!best||arr<best))best=arr}return best}
 function startTL(id){const r=S.routes.find(x=>x.id==id);if(!r)return;const tg=tlTarget(r);if(!tg)return toast('No return leg found',1);
   TL={id,start:now(),target:tg+MIN,st:Object.assign({},S.stat),c0:S.cash,logN:S.log.length};drawTL();clearInterval(TL.h);TL.h=setInterval(stepTL,100)}
 let PTR=0;['pointerdown','touchstart','mousedown'].forEach(ev=>document.addEventListener(ev,()=>{PTR=Date.now()},true));['pointerup','pointercancel','touchend','touchcancel','mouseup','click'].forEach(ev=>document.addEventListener(ev,()=>{PTR=0},true));
@@ -950,7 +955,7 @@ function drawTL(){let el=$('#tl');if(!el){el=document.createElement('div');el.id
    (TL.done?'<div class="card" style="margin-top:10px;border-color:var(--teal)"><b>Round trip complete</b><div class="g"><div><small>Flights</small><b>'+(d.fl-TL.st.fl)+'</b></div><div><small>Passengers</small><b>'+(d.pax-TL.st.pax)+'</b></div><div><small>Load</small><b>'+((d.seats-TL.st.seats)?Math.round(100*(d.pax-TL.st.pax)/(d.seats-TL.st.seats)):0)+'%</b></div><div><small>Revenue</small><b>'+usd(d.rev-TL.st.rev)+'</b></div><div><small>Costs</small><b>'+usd(d.cost-TL.st.cost)+'</b></div><div><small>Result</small><b>'+usd((d.rev-TL.st.rev)-(d.cost-TL.st.cost))+'</b></div></div><button id="tl_x" class="pri" style="width:100%">Close</button></div>':'<div class="row" style="margin-top:10px"><span class="mut">Idle time is skipped; flights play at about 20 game-minutes per second.</span><button id="tl_x">Stop</button></div>')+'</div>'}
 
 function legsOf(r,f,d0,d1){const t=TY[f.code],g=geom(r,t),L=[];if(!g)return L;
-  for(let d=d0;d<=d1;d++){const wa=[wxLeg(r,t,g,0,dayStart(d)),wxLeg(r,t,g,1,dayStart(d))];for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN;if(dep<r.created||(S.early&&S.early[r.id+':'+d+':'+k+':'+dir]))continue;L.push({r,f,dir,dep,arr:dep+(g.b+wa[dir])*MIN,o:dir?r.d:r.o,d:dir?r.o:r.d,turn:g.turn*MIN})}}return L}
+  for(let d=d0;d<=d1;d++){const wa=[wxLeg(r,t,g,0,dayStart(d)),wxLeg(r,t,g,1,dayStart(d))];for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN;if(dep<r.created||(S.early&&S.early[r.id+':'+d+':'+k+':'+dir]))continue;L.push({r,f,dir,dep,arr:dep+(g.b+wa[dir])*MIN,o:dir?r.d:r.o,d:dir?r.o:r.d,turn:g.turn*MIN})}}return L}
 function schedView(compact){if(!NETOK||!S.routes.length)return'';const n=now(),di=dayIdx(n);let all=[];
   S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(f&&!(f.mx&&n<f.mx.until))all=all.concat(legsOf(r,f,di-1,di+1))});
   const nxt=all.filter(l=>l.dep>=n).sort((a,b)=>a.dep-b.dep).slice(0,3),air=all.filter(l=>l.dep<=n&&n<l.arr);
@@ -968,7 +973,7 @@ function schedView(compact){if(!NETOK||!S.routes.length)return'';const n=now(),d
   return h}
 let RSEL=null,FSEL=null,RGSEL=null;
 function turnTxt(r,t){const g=geom(r,t);if(!g)return'';const tm=m=>{const d=Math.floor(m/1440);return mm2(((m%1440)+1440)%1440)+(d>0?'<sup>+'+d+'</sup>':'')};let h='<div class="mut" style="margin-top:4px;font-size:12px;line-height:1.5">';
-  for(let k=0;k<r.rt;k++){const a=r.dep+k*g.cyc,b=a+g.b,c=b+g.turn,e=c+g.b;h+=(r.rt>1?'<div>Turn '+(k+1)+'</div>':'')+'<div>'+r.o+' dep <b style="color:var(--ink,#111)">'+tm(a)+'</b> → '+r.d+' arr <b style="color:var(--ink,#111)">'+tm(b)+'</b></div><div>'+r.d+' dep <b style="color:var(--ink,#111)">'+tm(c)+'</b> → '+r.o+' arr <b style="color:var(--ink,#111)">'+tm(e)+'</b></div>'}
+  for(let k=0;k<r.rt;k++){const a=rdp(r,g,k),b=a+g.b,c=b+g.turn,e=c+g.b;h+=(r.rt>1?'<div>Turn '+(k+1)+'</div>':'')+'<div>'+r.o+' dep <b style="color:var(--ink,#111)">'+tm(a)+'</b> → '+r.d+' arr <b style="color:var(--ink,#111)">'+tm(b)+'</b></div><div>'+r.d+' dep <b style="color:var(--ink,#111)">'+tm(c)+'</b> → '+r.o+' arr <b style="color:var(--ink,#111)">'+tm(e)+'</b></div>'}
   return h+'<div>Block '+Math.floor(g.b/60)+'h'+String(g.b%60).padStart(2,'0')+' each way · ground time '+g.turn+' min at '+r.d+' · all times UTC</div></div>'}
 function routesView(){
   const free=S.fleet.slice();
@@ -986,9 +991,9 @@ function routesView(){
     return c+'</div>'}).join('');
   return h}
 let ER=null,RMC=null;
-function erTmp(r){return Object.assign({},r,{dep:ER.dep,rt:ER.rt,days:ER.days.slice(),dw:ER.days.length})}
+function erTmp(r){const o=Object.assign({},r,{dep:ER.dep,rt:ER.rt,days:ER.days.slice(),dw:ER.days.length,deps:undefined});o.deps=xDeps(ER,o);return o}
 function editPanel(r,f,t){const tmp=erTmp(r),e=slotCheck(tmp,t,r.id)||acConflict(tmp,f,r.id),sn=slotNeeds(tmp,t),sc=slotCost(sn),air=status(f).air;
-  return '<div class="card" style="margin:8px 0;border-color:var(--teal)"><b>Edit schedule</b><span class="lab">First departure (UTC), round trips</span><div class="bar" style="margin:0"><select id="er_h">'+[...Array(24).keys()].map(x=>'<option value="'+x+'"'+(x===Math.floor(ER.dep/60)?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="er_m">'+[0,15,30,45].map(x=>'<option value="'+x+'"'+(x===ER.dep%60?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="er_rt">'+[1,2,3,4,5,6].map(x=>'<option value="'+x+'"'+(x===ER.rt?' selected':'')+'>'+x+' round trip'+(x>1?'s':'')+' / day</option>').join('')+'</select></div><div class="bar" style="margin:6px 0 0">'+WD.map((w,x)=>'<button data-ewd="'+x+'" class="'+(ER.days.includes(x)?'on':'')+'">'+w+'</button>').join('')+'</div>'+turnTxt(tmp,t)+
+  return '<div class="card" style="margin:8px 0;border-color:var(--teal)"><b>Edit schedule</b><span class="lab">First departure (UTC), round trips</span><div class="bar" style="margin:0"><select id="er_h">'+[...Array(24).keys()].map(x=>'<option value="'+x+'"'+(x===Math.floor(ER.dep/60)?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="er_m">'+[0,15,30,45].map(x=>'<option value="'+x+'"'+(x===ER.dep%60?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="er_rt">'+[1,2,3,4,5,6].map(x=>'<option value="'+x+'"'+(x===ER.rt?' selected':'')+'>'+x+' round trip'+(x>1?'s':'')+' / day</option>').join('')+'</select></div>'+turnsUI(ER,'er',r)+'<div class="bar" style="margin:6px 0 0">'+WD.map((w,x)=>'<button data-ewd="'+x+'" class="'+(ER.days.includes(x)?'on':'')+'">'+w+'</button>').join('')+'</div>'+turnTxt(tmp,t)+
   (e?'<div class="mut rd" style="margin-top:6px">'+e+' <button id="er_af">Find a clear time</button></div>':'<div class="mut ok" style="margin-top:6px">No clashes.</div>')+(sc>0?'<div class="mut" style="margin-top:4px">New slots to buy: '+money(sc)+'</div>':'')+(air?'<div class="mut rd" style="margin-top:4px">The aircraft is airborne. You can save once it lands.</div>':'')+
   '<div class="row" style="margin-top:8px"><button id="er_x">Cancel</button><button id="er_ok" class="pri"'+(e||air?' disabled':'')+'>Save schedule</button></div></div>'}
 function erAuto(r,f,t){const g=geom(r,t);if(!g)return;const days=ER.days.slice();for(let i=0;i<96;i++){const dep=(ER.dep+i*15)%1440,tmp=Object.assign({},r,{dep,rt:ER.rt,days,dw:days.length});if(!acConflict(tmp,f,r.id)&&!slotCheck(tmp,t,r.id)){ER.dep=dep;return}}
@@ -996,7 +1001,7 @@ function erAuto(r,f,t){const g=geom(r,t);if(!g)return;const days=ER.days.slice()
 function saveEdit(){const r=S.routes.find(x=>x.id===ER.id);if(!r){ER=null;return render()}const f=S.fleet.find(x=>x.reg===r.reg),t=TY[f.code];if(status(f).air)return toast('Aircraft is airborne. Wait until it lands.',1);
   const tmp=erTmp(r),e=slotCheck(tmp,t,r.id)||acConflict(tmp,f,r.id);if(e)return toast(e,1);const sn=slotNeeds(tmp,t),sc=slotCost(sn);if(S.cash<sc)return toast('Slots cost '+money(sc),1);
   if(sc>0){LG('Slots').cash-=sc;slotsGrant(sn);log('Bought slots for '+r.o+'-'+r.d+': '+money(sc))}
-  r.dep=tmp.dep;r.rt=tmp.rt;r.days=tmp.days;r.dw=tmp.dw;ER=null;save();toast('Schedule updated: '+r.o+'-'+r.d);render()}
+  r.dep=tmp.dep;r.rt=tmp.rt;r.days=tmp.days;r.dw=tmp.dw;if(tmp.deps)r.deps=tmp.deps;else delete r.deps;ER=null;save();toast('Schedule updated: '+r.o+'-'+r.d);render()}
 function routeDetail(r,f){const t=TY[f.code],g=geom(r,t),s=r.st||{rev:0,cost:0,fl:0,pax:0,seats:0,canc:0},sel=r.id===RSEL,pd=pairDemand(r),ref=refFare(g.d,r.o,r.d);
   const head='<div data-rs="'+r.id+'" style="cursor:pointer"><div class="row"><span><span class="code">'+r.o+' - '+r.d+'</span></span><span class="badge">'+r.rt+'x '+dayTxt(r)+'</span></div><div class="row mut" style="margin-top:2px"><span>Departs '+mm2(r.dep)+' UTC</span><span class="'+(s.rev-s.cost<0?'rd':'ok')+'">'+money((s.rev-s.cost)/1e6)+' profit</span></div></div>';
   if(!sel)return '<div style="padding:6px 0;border-top:1px solid var(--line)">'+head+'</div>';
@@ -1009,7 +1014,7 @@ function acBar(f){const n=now(),di=dayIdx(n),ds=dayStart(di),pct=ms=>Math.max(0,
   return '<div class="mut" style="font-size:11px;margin-top:6px">Today (UTC)</div><div style="position:relative;height:22px;background:var(--panel2);border-radius:5px;overflow:hidden;margin:3px 0 6px">'+seg+'<div style="position:absolute;top:0;bottom:0;left:'+pct(n)+'%;width:2px;background:var(--amber)"></div></div>'}
 function candidates(t,f){const out=[];Object.keys(AP).forEach(a=>{if(a===S.base)return;const p=PAIR[S.base+'|'+a];if(!p)return;const d=p[2];
   if(d*1.05>t[9]||!lim(t,a)||seatsAt(t,S.base,d,f.seats||t[3])<=0||seatsAt(t,a,d,f.seats||t[3])<=0||['blocked','cabotage'].includes(trTier(AP[S.base].cc,AP[a].cc)))return;out.push([a,d,rtDemV(a,p[3]),p[3]])});out.sort((x,y)=>y[2]-x[2]);return out}
-function autoPlan(f,t){const key=NR.reg+'|'+NR.d+'|'+S.routes.length;NR.autoKey=key;NR.autoMsg='';if(!NR.d||AP[NR.d]==null)return;
+function autoPlan(f,t){NR.cust=0;NR.dd=null;const key=NR.reg+'|'+NR.d+'|'+S.routes.length;NR.autoKey=key;NR.autoMsg='';if(!NR.d||AP[NR.d]==null)return;
   const mk=(dep,rt,days)=>({id:0,reg:f.reg,o:S.base,d:NR.d,dep,rt,dw:days.length,days,fare:100,created:0});
   const g=geom(mk(480,1,ALLD),t);if(!g)return;const others=S.routes.filter(o=>o.reg===f.reg);
   let from=480,after='';if(others.length){let best=-1;others.forEach(o=>{const og=geom(o,t);if(!og)return;const e=o.dep+o.rt*og.cyc;if(e>best){best=e;after=o.o+'-'+o.d}});if(best>=0)from=Math.ceil(best/15)*15}
@@ -1030,8 +1035,8 @@ function newRouteCard(free){
   h+='<span class="lab">Destination (by daily demand)</span><input id="nr_q" type="search" placeholder="Search IATA code or city" autocomplete="off" autocapitalize="characters" value="'+(NR.q||'').replace(/"/g,'')+'" style="width:100%;margin-bottom:6px"><select id="nr_d" style="width:100%">'+CF.map(c=>'<option value="'+c[0]+'"'+(c[0]===NR.d?' selected':'')+'>'+c[0]+' '+AP[c[0]].city+' · '+c[1]+' nm · '+rtDemTxt(c)+(hasRights(c[0])?'':' · needs permit')+(trOk(S.base,c[0])?'':' · needs traffic rights')+(trTier(AP[S.base].cc,AP[c[0]].cc)==='blocked'?' · no rights possible':'')+'</option>').join('')+'</select>'+(qq&&!CF.length?'<div class="mut rd">No reachable airport matches "'+qq.toUpperCase()+'".</div>':'')+pickMap(C);
   h+=researchRows(qq);
   const d=nm(S.base,NR.d),ref=refFare(d,S.base,NR.d);if(NR.fm==null)NR.fm=1;
-  const r={id:0,reg:NR.reg,o:S.base,d:NR.d,dep:NR.dep,rt:NR.rt,dw:ndw(),days:(NR.days||ALLD).slice(),fare:Math.round(ref*NR.fm),created:0},g=geom(r,t);
-  h+='<span class="lab">First departure (UTC)</span><div class="bar" style="margin:0"><select id="nr_h">'+[...Array(24).keys()].map(x=>'<option value="'+x+'"'+(x===Math.floor(NR.dep/60)?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="nr_m">'+[0,15,30,45].map(x=>'<option value="'+x+'"'+(x===NR.dep%60?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="nr_rt">'+[1,2,3,4,5,6].map(x=>'<option value="'+x+'"'+(x===NR.rt?' selected':'')+'>'+x+' round trip'+(x>1?'s':'')+' / day</option>').join('')+'</select></div><div class="bar" style="margin:6px 0 0">'+WD.map((w,x)=>'<button data-wd="'+x+'" class="'+((NR.days||ALLD).includes(x)?'on':'')+'">'+w+'</button>').join('')+'</div>';
+  const r={id:0,reg:NR.reg,o:S.base,d:NR.d,dep:NR.dep,rt:NR.rt,dw:ndw(),days:(NR.days||ALLD).slice(),fare:Math.round(ref*NR.fm),created:0};r.deps=xDeps(NR,r);const g=geom(r,t);
+  h+='<span class="lab">First departure (UTC)</span><div class="bar" style="margin:0"><select id="nr_h">'+[...Array(24).keys()].map(x=>'<option value="'+x+'"'+(x===Math.floor(NR.dep/60)?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="nr_m">'+[0,15,30,45].map(x=>'<option value="'+x+'"'+(x===NR.dep%60?' selected':'')+'>'+String(x).padStart(2,'0')+'</option>').join('')+'</select><select id="nr_rt">'+[1,2,3,4,5,6].map(x=>'<option value="'+x+'"'+(x===NR.rt?' selected':'')+'>'+x+' round trip'+(x>1?'s':'')+' / day</option>').join('')+'</select></div>'+turnsUI(NR,'nr',r)+'<div class="bar" style="margin:6px 0 0">'+WD.map((w,x)=>'<button data-wd="'+x+'" class="'+((NR.days||ALLD).includes(x)?'on':'')+'">'+w+'</button>').join('')+'</div>';
   if(NR.autoMsg&&!NR.manual)h+='<div class="mut" style="margin-top:6px">'+NR.autoMsg+'</div>';
   h+='<span class="lab">Rivals on this route</span><div id="nr_rv"></div>';
   h+='<span class="lab">Base fare '+usd(r.fare)+' + '+usd(psc(S.base))+' taxes and charges = '+usd(r.fare+psc(S.base))+' ticket ('+Math.round(NR.fm*100)+'% of reference '+usd(ref)+')</span>'+(typeof fareCtl==='function'?fareCtl(r.fare,ref):'<input type="range" id="nr_f" min="60" max="200" value="'+Math.round(NR.fm*100)+'">');
@@ -1051,7 +1056,7 @@ function newRouteCard(free){
   const sn=slotNeeds(r,t),sc=slotCost(sn);if(sn.length)h+='<div class="warn" style="margin-top:8px"><b>Slots to buy</b>'+sn.map(x=>'<div>'+x.a+' '+String(x.h).padStart(2,'0')+':00 x'+x.n+' · '+money(x.n*x.p)+'</div>').join('')+'<div style="margin-top:4px">Total '+money(sc)+', charged when you start the route.</div></div>';  h+=(slot?'<div class="mut rd" style="margin-top:6px">'+slot+' <button id="nr_af">Find a clear time</button></div>':'<div class="mut ok" style="margin-top:6px">Slots available.</div>')+'<div class="row" style="margin-top:8px"><button id="nr_x">Cancel</button><button id="nr_now"'+(noR?' disabled':'')+'>Depart in ~10 min</button><button id="nr_ok" class="pri"'+(slot||noR||trNo||trCap||tri.t==='blocked'||S.cash<sc?' disabled':'')+'>Start flying</button></div></div>';
   return h}
 function createRoute(){if(!hasRights(NR.d))return toast('Buy a landing permit at '+NR.d+' first',1);if(!trOk(S.base,NR.d))return toast('Buy traffic rights first (no open skies agreement)',1);const f=S.fleet.find(x=>x.reg===NR.reg),t=TY[f.code],ref=refFare(nm(S.base,NR.d),S.base,NR.d);
-  const r={id:S.rid++,reg:NR.reg,o:S.base,d:NR.d,dep:NR.dep,rt:NR.rt,dw:ndw(),days:(NR.days||ALLD).slice(),fare:Math.round(ref*NR.fm),created:now()};const e=slotCheck(r,t,0)||acConflict(r,f,0);if(e)return toast(e,1);
+  const r={id:S.rid++,reg:NR.reg,o:S.base,d:NR.d,dep:NR.dep,rt:NR.rt,dw:ndw(),days:(NR.days||ALLD).slice(),fare:Math.round(ref*NR.fm),created:now()};r.deps=xDeps(NR,r);if(!r.deps)delete r.deps;const e=slotCheck(r,t,0)||acConflict(r,f,0);if(e)return toast(e,1);
   const sn=slotNeeds(r,t),sc=slotCost(sn);if(S.cash<sc)return toast('Slots cost '+money(sc),1);if(sc>0){LG('Slots').cash-=sc;slotsGrant(sn);log('Bought slots for '+r.o+'-'+r.d+': '+money(sc))}
   S.routes.push(r);NR=null;save();toast('Route started: '+r.o+'-'+r.d);render()}
 function airportsView(){
@@ -1085,7 +1090,7 @@ function gcPath(a,b){let s='',pl=null;for(let i=0;i<=48;i++){const p=gcPt(a,b,i/
 function airFlight(f){if(!NETOK||(f.mx&&now()<f.mx.until))return null;const t=TY[f.code],n=now();
   for(const r of S.routes){if(r.reg!==f.reg)continue;const g=geom(r,t);if(!g)continue;
     for(let d=dayIdx(n)-1;d<=dayIdx(n);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
-      const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN,arr=dep+(g.b+wxLeg(r,t,g,dir,dayStart(d)))*MIN;if(dep<r.created||(S.early&&S.early[r.id+':'+d+':'+k+':'+dir]))continue;
+      const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN,arr=dep+(g.b+wxLeg(r,t,g,dir,dayStart(d)))*MIN;if(dep<r.created||(S.early&&S.early[r.id+':'+d+':'+k+':'+dir]))continue;
       if(dep<=n&&n<arr)return{f,r,t,dir,dep,arr,p:(n-dep)/(arr-dep)}}}return null}
 
 
@@ -1470,7 +1475,7 @@ function buyTraffic(o,d){const i=trInfo(o,d);if(i.t==='blocked'||i.t==='cabotage
 const coord=a=>AP[a]&&AP[a].tier===1;
 const slotPrice=h=>Math.round((.3+1.2*OCC[h]/.8)*20)/20;
 function slotNeeds(r,t){const g=geom(r,t);if(!g)return[];const m={};
-  for(let k=0;k<r.rt;k++){const m0=r.dep+k*g.cyc;[[m0,r.o],[m0+g.b,r.d],[m0+g.b+g.turn,r.d],[m0+2*g.b+g.turn,r.o]].forEach(([mm,a])=>{if(!coord(a))return;const h=Math.floor(((mm%1440)+1440)%1440/60),key=a+'|'+h;m[key]=(m[key]||0)+1})}
+  for(let k=0;k<r.rt;k++){const m0=rdp(r,g,k);[[m0,r.o],[m0+g.b,r.d],[m0+g.b+g.turn,r.d],[m0+2*g.b+g.turn,r.o]].forEach(([mm,a])=>{if(!coord(a))return;const h=Math.floor(((mm%1440)+1440)%1440/60),key=a+'|'+h;m[key]=(m[key]||0)+1})}
   const out=[];Object.keys(m).forEach(key=>{const [a,h]=key.split('|'),H=+h,used=usage(a,r.id)[H],held=((S.slots||{})[a]||{})[H]||0,def=Math.max(0,used+m[key]-held);if(def>0)out.push({a,h:H,n:def,p:slotPrice(H)})});return out}
 const slotCost=L=>L.reduce((x,s)=>x+s.n*s.p,0);
 function slotsGrant(L){S.slots=S.slots||{};L.forEach(s=>{S.slots[s.a]=S.slots[s.a]||{};S.slots[s.a][s.h]=(S.slots[s.a][s.h]||0)+s.n})}
@@ -2717,6 +2722,15 @@ function hubSellUI(a,n,c){let why='';if((S.hubs||[]).length<2)why='Your only hub
 document.addEventListener('click',e=>{const b=e.target.closest('[data-hsell]');if(!b)return;const a=b.dataset.hsell;if(HSC!==a){HSC=a;render();return}
   const c=S.hubCost[a]||0,n=S.routes.filter(r=>r.o===a).length;HSC=null;if((S.hubs||[]).length<2||a===S.base||!c||n)return render();
   const p=c*.7;S.hubs=S.hubs.filter(x=>x!==a);delete S.hubCost[a];delete S.hubDue[a];LG('Hub sales').cash+=p;log('Sold hub '+a+' for '+money(p));save();toast('Hub sold: '+money(p));render()});
+
+/* ---------- choose each departure time instead of back-to-back turns (new route and edit schedule) ---------- */
+function tcCtx(p){const X=p==='nr'?NR:ER;if(!X)return null;const base=p==='nr'?{reg:X.reg,o:S.base,d:X.d}:S.routes.find(x=>x.id===X.id);if(!base)return null;const r0=Object.assign({},base,{dep:X.dep,rt:X.rt}),f=S.fleet.find(x=>x.reg===r0.reg),g=f&&geom(r0,TY[f.code]);return g?{X,r0,g}:null}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-tc]');if(!b)return;const[p,a]=b.dataset.tc.split('|'),c=tcCtx(p);if(!c)return;const{X,g}=c;
+  if(a==='t'){if(X.cust)X.cust=0;else{X.cust=1;X.dd=Array.from({length:X.rt},(_,k)=>X.dep+k*g.cyc)}}
+  else if(a==='sp'){const gap=Math.max(g.cyc,Math.floor(1440/X.rt/15)*15);X.dd=Array.from({length:X.rt},(_,k)=>X.dep+k*gap)}
+  if(p==='nr')X.manual=1;render()});
+document.addEventListener('change',e=>{const s=e.target.closest('select[data-tt]');if(!s)return;const[p,k,w]=s.dataset.tt.split('|'),c=tcCtx(p);if(!c)return;const{X,r0}=c,dp=xDeps(X,r0);if(!dp)return;
+  const m=((dp[+k]%1440)+1440)%1440;let H=Math.floor(m/60),M=m%60;if(w==='h')H=+s.value;else M=+s.value;X.dd=dp.slice();X.dd[+k]=H*60+M;if(p==='nr')X.manual=1;render()});
 /* ---------- advance bookings: 24 h booking window ---------- */
 const BKW=24*3600000,BKCL=45*60000;
 const BKL=5;
@@ -2731,7 +2745,7 @@ function bkApply(r,e,dep){if(((S.stat&&S.stat.fl)||0)<BKL){e.bk=1;e.launch=1;if(
 const BKC={};
 function bkExp(r,f,t,n){const c=BKC[r.id];if(c&&n-c.t<10*60000&&c.f===f.reg)return c;let a={rev:0,pax:0,seats:0};try{const e=econ(r,f,t,0,.5,n),e2=econ(r,f,t,1,.5,n);a={rev:(e.rev+e2.rev)/2,pax:(e.pax+e2.pax)/2,seats:(e.seats+e2.seats)/2}}catch(x){}return BKC[r.id]={t:n,f:f.reg,...a}}
 function bkFlights(r,f,t,g,n,hz){const out=[];for(let d=dayIdx(n)-1;d<=dayIdx(n+hz);d++)for(let k=0;k<(opd(r,d)?r.rt:0);k++)for(let dir=0;dir<2;dir++){
-  const dep=dayStart(d)+(r.dep+k*g.cyc+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN,id=r.id+':'+d+':'+k+':'+dir;
+  const dep=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN,arr=dep+g.b*MIN,id=r.id+':'+d+':'+k+':'+dir;
   if(arr>n&&dep<=n+hz&&dep>=r.created&&!(S.early&&S.early[id]))out.push({dep,arr,dir,id})}return out}
 function bkShare(r,dep,n){const cl=dep-BKCL;if(n>=cl)return 1;const w0=Math.max(r.created||0,dep-BKW);if(n<=w0||cl<=w0)return 0;return bkB((n-w0)/(cl-w0))}
 function bkAdv(n){let A=0;S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;const ex=bkExp(r,f,t,n);
@@ -2830,7 +2844,7 @@ document.addEventListener('click',e=>{const ps_=e.target.closest('[data-pos]');i
     else if(D.cbdel){const [h,i]=D.cbdel.split('|');S.banks[h].splice(+i,1);save();render()}
     else if(D.cbclr){S.banks[D.cbclr]=[];save();render()}
     else if(D.cbsug){S.banks=S.banks||{};const b=cxSuggest(D.cbsug);if(!b.length)toast('No inbound flights at '+D.cbsug+' to build banks from',1);else{S.banks[D.cbsug]=b;save();toast('Suggested '+b.length+' bank'+(b.length>1?'s':''))}render()}
-    else if(D.es){const r=S.routes.find(x=>x.id==D.es);if(r){ER=ER&&ER.id===r.id?null:{id:r.id,dep:r.dep,rt:r.rt,days:(r.days||ALLD).slice()};RMC=null;render()}}
+    else if(D.es){const r=S.routes.find(x=>x.id==D.es);if(r){ER=ER&&ER.id===r.id?null:{id:r.id,dep:r.dep,rt:r.rt,days:(r.days||ALLD).slice(),cust:r.deps?1:0,dd:r.deps?r.deps.slice():null};RMC=null;render()}}
     else if(D.ewd!=null&&ER){const w=+D.ewd,a=ER.days.slice(),k=a.indexOf(w);if(k>=0){if(a.length>1)a.splice(k,1)}else a.push(w);ER.days=a.sort();render()}
     else if(b.id==='er_x'){ER=null;render()}else if(b.id==='er_ok')saveEdit();else if(b.id==='er_af'&&ER){const r=S.routes.find(x=>x.id===ER.id),f=S.fleet.find(x=>x.reg===r.reg);erAuto(r,f,TY[f.code]);render()}
     else if(D.rm){const i=S.routes.findIndex(x=>x.id==D.rm);if(i<0)return;const r=S.routes[i],f=S.fleet.find(x=>x.reg===r.reg);if(f&&status(f).air)return toast('Aircraft is airborne on this route. Cancel once it lands.',1);
