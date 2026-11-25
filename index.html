@@ -883,7 +883,7 @@ function settingsView(){const sec=(t,b)=>'<div class="card"><b>'+t+'</b><div sty
   sec('Game','<div class="mut" style="margin-top:-4px">UTC clock, synced to the server.</div>'+rw('Active hub',S.hubs?sel('base',S.hubs.map(a=>[a,'Hub '+a]),S.base):'-')+rw('Game month (deliveries, maintenance, builds)',sel('ratio',[[15,'1 month = 15 min'],[60,'1 month = 1 hour']],S.ratio))+rw('Rival pace',sel('aipace',[[.3,'Slow'],[.6,'Normal'],[1.2,'Fast']],S.aiPace||.6)+'<div class="mut" style="margin:-2px 0 6px">Rivals, market, leases and dividends update once per real week.</div>')+rw('Lease billing',sel('bill',[['week','Weekly'],['month','Monthly']],S.bill))+rw('Business model',sel('pos',Object.keys(POS).map(k=>[k,POS[k].n]),S.pos||'hyb'))+rw('Auto checks','<button id="automx">'+(S.autoMx?'ON (+25%)':'OFF')+'</button>'))+
   sec('Appearance',rw('Theme','<button id="theme">'+(document.documentElement.dataset.theme==='light'?'Light':'Dark')+' · switch</button>'))+
   sec('Account',(S.inv?'<div class="row"><span class="mut">Investor: '+Math.round(S.inv*100)+'% of net profit each game month</span><button data-ac="buyout">Buy out '+money(invBuy())+'</button></div>':'')+'<div class="mut" style="margin-top:-4px">Profiles are saved on this device only.</div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><button data-ac="out">Switch airline / log out</button><button data-ac="reset">Reset airline</button><button data-ac="delete">Delete airline</button></div>')+
-  (typeof audCard==='function'?audCard():'')+(typeof pinCard==='function'?pinCard():'')+
+  (typeof mxwCard==='function'?mxwCard():'')+(typeof audCard==='function'?audCard():'')+(typeof pinCard==='function'?pinCard():'')+
   sec('Testing tools','<div class="mut" style="margin-top:-4px">Sandbox helpers for trying things out.</div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><button id="s1h">+1 hour</button><button id="s1d">+1 day</button><button id="topup">+$25M</button></div>')}
 const SCN={lean:{n:'Lean start',cash:15,d:'About $15M. A tight start for a small fleet of regional or turboprop aircraft. No strings attached.'},std:{n:'Standard',cash:60,d:'About $60M. The recommended balanced start, no strings attached.'},inv:{n:'Investor-backed',cash:150,share:.08,d:'About $150M from an investor, who takes 8% of net profit each game month. You can buy them out later.'},sbx:{n:'Sandbox',cash:1000,d:'About $1,000M with no strings. For experimenting with big fleets and expensive routes.'}};
 const scCash=(k,a)=>Math.round(SCN[k||'std'].cash*rgp(a).cash);
@@ -1773,8 +1773,9 @@ function crash(f,r,t,nm,arr){const v=value(t,f.age,f.cond);let net;
   LG('Accident settlements').cash+=net;S.fleet=S.fleet.filter(x=>x!==f);S.routes=S.routes.filter(x=>x.reg!==f.reg);S.repPen=Math.min(.5,(S.repPen||0)+.3);S.acc=(S.acc||0)+1;
   const m=f.reg+' ('+t[1]+') written off in a serious accident on '+nm+(f.how==='own'?'. Insurance paid 80% of value, less investigation costs: ':'. Hull-loss settlement and costs: ')+money(net);
   log(m);MXQ.push(m+'. Bookings drop while confidence recovers.')}
-function mxWarns(){const w=[];S.fleet.forEach(f=>{const t=TY[f.code],k=mxRisk(f,t);
-  [['A',f.aFH,t[18]],['C',f.cFH,cint(t)]].forEach(([n,rem,int])=>{if(rem<0)w.push([f.reg,n,'rd',k.ground?'is GROUNDED: '+n+'-check overdue':n+'-check overdue: accident risk rising']);else if(rem<int*.1)w.push([f.reg,n,'am',n+'-check due in '+Math.round(rem)+' FH'])})});return w}
+const mxDayFH=f=>{let h=0;S.routes.forEach(r=>{if(r.reg!==f.reg)return;const g=geom(r,TY[f.code]);if(g)h+=r.rt*PLD(r)/7*2*g.b/60});return h};
+function mxWarns(){const w=[],pc=(S.mxW||10)/100;S.fleet.forEach(f=>{const t=TY[f.code],k=mxRisk(f,t),dh=mxDayFH(f);
+  [['A',f.aFH,t[18]],['C',f.cFH,cint(t)]].forEach(([n,rem,int])=>{if(rem<0)w.push([f.reg,n,'rd',k.ground?'is GROUNDED: '+n+'-check overdue':n+'-check overdue: accident risk rising']);else if(rem<int*pc)w.push([f.reg,n,'am',n+'-check due in '+Math.round(rem)+' FH'+(dh>0?' (about '+Math.max(1,Math.round(rem/dh))+' day'+(Math.round(rem/dh)>1?'s':'')+' of flying)':'')])})});return w}
 function mxBanner(){const w=mxWarns();if(!w.length)return'';return '<div class="warn" style="'+(w.some(x=>x[2]==='rd')?'background:#2a1214;border-color:#7a1f24;color:#f3a8a8':'')+'"><b>Maintenance</b>'+w.slice(0,6).map(x=>'<div>'+x[0]+' '+x[3]+'</div>').join('')+'<div style="margin-top:4px">Open the Fleet tab and send the aircraft to a check.</div></div>'}
 document.addEventListener('click',e=>{if(e.target.id==='automx'){S.autoMx=!S.autoMx;save();e.target.textContent=(S.autoMx?'ON (+25%)':'OFF')}});
 
@@ -2731,6 +2732,10 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-tc]');if(!
   if(p==='nr')X.manual=1;render()});
 document.addEventListener('change',e=>{const s=e.target.closest('select[data-tt]');if(!s)return;const[p,k,w]=s.dataset.tt.split('|'),c=tcCtx(p);if(!c)return;const{X,r0}=c,dp=xDeps(X,r0);if(!dp)return;
   const m=((dp[+k]%1440)+1440)%1440;let H=Math.floor(m/60),M=m%60;if(w==='h')H=+s.value;else M=+s.value;X.dd=dp.slice();X.dd[+k]=H*60+M;if(p==='nr')X.manual=1;render()});
+
+/* ---------- maintenance reminder lead time (Settings) ---------- */
+function mxwCard(){const v=S.mxW||10;return'<div class="card"><b>Maintenance reminders</b><div class="mut" style="margin:4px 0 8px">Show A-check and C-check warnings on Home and the Fleet tab when an aircraft has this much of its interval left. Higher means earlier warnings.</div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap">'+[[5,'5%'],[10,'10%'],[20,'20%'],[30,'30%'],[50,'50%']].map(x=>'<button data-mxw="'+x[0]+'" class="'+(v===x[0]?'on':'')+'">'+x[1]+'</button>').join('')+'</div></div>'}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-mxw]');if(!b)return;S.mxW=+b.dataset.mxw;save();render()});
 /* ---------- advance bookings: 24 h booking window ---------- */
 const BKW=24*3600000,BKCL=45*60000;
 const BKL=5;
