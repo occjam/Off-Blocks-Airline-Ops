@@ -926,7 +926,7 @@ function progView(){const L=progItems();if(!L.length)return'<div class="card"><b
   return '<div class="mut" style="margin-bottom:6px">'+L.length+' item'+(L.length>1?'s':'')+' in progress. Soonest first.</div>'+Object.keys(G).map(k=>'<h3>'+k+' ('+G[k].length+')</h3>'+G[k].map(x=>x.oi!=null&&typeof ordCard==='function'?ordCard(x.oi):'<div class="card" style="padding:9px 12px"><div class="row"><span><b>'+x.t+'</b><div class="mut">'+x.s+'</div></span><span class="badge cd" data-due="'+x.due+'"></span></div></div>').join('')).join('')}
 function ipcUpd(){const e=document.getElementById('ipc');if(!e)return;const L=progItems();if(!L.length){e.style.display='none';return}const a=L[0];
   e.style.display='block';e.innerHTML='<button data-t="prog" style="display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;margin-top:6px;padding:6px 10px;background:#eef6f5;color:#0f172a;border:1px solid var(--teal);border-radius:10px;font-size:13px"><span><b>'+L.length+' in progress</b> · next: '+a.t+' ('+a.s.toLowerCase()+')</span><span class="cd" data-due="'+a.due+'"></span></button>'}
-function bookView(){let h='<div class="mut" style="margin-bottom:8px">Seats sold ahead of each flight, and the fare controls for them. Bookings open 24 hours before departure and close with check-in, 45 minutes before.</div>';try{const c=bkOvCard();h+=c?foldAll(c,'book',/^Advance/):'<div class="empty"><b>No bookings yet</b><div class="mut">Start a route and its advance sales appear here.</div></div>'}catch(x){}return h}
+function bookView(){let h='';try{h+=bkPage()}catch(x){h+='<div class="mut">Bookings could not load.</div>'}return h}
 function morePage(){const T=(t,n,d)=>'<button data-t="'+t+'" class="card" style="text-align:left;display:block;width:100%;margin:0"><b>'+n+'</b><div class="mut" style="font-size:12px;margin-top:2px">'+d+'</div></button>',G=(n,a)=>'<div class="mut" style="margin:12px 0 6px;font-weight:600">'+n+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+a.join('')+'</div>';
   return G('Network',[T('hubs','Hubs','Your bases, buy or sell'),T('cx','Connections','Feeder traffic between hubs'),T('ap','Airports','Runways, slots, rights'),T('riv','Rivals','Competing airlines'),T('gnd','Ground ops','Stands, ramp, check-in')])
    +G('Money',[T('log','Finance','Profit, ledger, forecast'),T('bank','Bank','Loans and deposits')])
@@ -2797,6 +2797,33 @@ document.addEventListener('click',e=>{let b=e.target.closest('[data-ffo]');if(b)
   b=e.target.closest('[data-spr]');if(b){const [id,v]=b.dataset.spr.split('|'),r=S.routes.find(x=>x.id==id);if(r){r.sp=+v;S.spT=0;if(!+v&&S.ff){for(const k in S.ff){const E=S.ff[k];if(k.split(':')[0]==id&&E.a&&E.dp>now()){ffSet(r,k,E.dp,1,0);E.lock=0;E.a=0}}}
       save();render()}return}
   b=e.target.closest('[data-ffm]');if(b){const [id,d,rid,dep]=b.dataset.ffm.split('|'),r=S.routes.find(x=>x.id==rid);if(!r)return;if(+dep<now()+BKCL)return toast('Bookings closed at check-in close',1);const cur=ffCur(id),m=+d===0?1:Math.max(.5,Math.min(2,Math.round(cur*(1+d/100)*100)/100));ffSet(r,id,+dep,m,0);save();render()}});
+
+/* ---------- Bookings page: one compact row per upcoming flight; tap for booked seats by class and its fare ---------- */
+let BKX={},BKF='';
+function bkClsFor(r,f,t,L,n){let e;try{e=econ(r,f,t,L.dir,rng(hs(L.id))(),L.dep)}catch(x){return null}if(!e||!e.cls||!e.cls.s)return null;
+  const lau=bkLaunch(r,L.dep),sf=lau?1:bkSf(r,L.dep),sh=bkShare(r,L.dep,n),out=[];
+  CLS.forEach(k=>{const s=e.cls.s[k]||0;if(s<=0)return;const p=lau?s:Math.min(s,(e.cls.p[k]||0)*sf);out.push({k,s,fin:Math.round(p),now:Math.round(p*sh)})});return out}
+function bkPage(){const n=now();if(!S.routes||!S.routes.length)return'<div class="empty"><b>No bookings yet</b><div class="mut">Start a route and its advance sales appear here.</div></div>';
+  let h='<div class="card"><div class="row"><b>Advance sales</b><b>'+usd(S.advA||0)+'</b></div><div class="mut" style="margin-top:4px">Received for flights that have not landed yet. Sales open 24 hours before departure and close at check-in, 45 minutes before.</div>'
+   +'<select id="bk_rt" style="width:100%;margin-top:8px"><option value="">All routes</option>'+S.routes.map(r=>'<option value="'+r.id+'"'+(String(r.id)===BKF?' selected':'')+'>'+r.o+' - '+r.d+' · '+r.reg+'</option>').join('')+'</select></div>';
+  const rows=[];S.routes.forEach(r=>{if(BKF&&String(r.id)!==BKF)return;const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;
+    bkFlights(r,f,t,g,n,BKW).filter(L=>L.dep>n).forEach(L=>rows.push({r,f,t,g,L}))});
+  rows.sort((a,b)=>a.L.dep-b.L.dep);
+  if(!rows.length)return h+'<div class="mut" style="margin:10px 0">No flights open for sale in the next 24 hours.</div>';
+  h+='<div class="mut" style="margin:10px 0 6px">Next flights</div>';
+  rows.slice(0,BKF?12:10).forEach(({r,f,t,g,L})=>{const cl=bkClsFor(r,f,t,L,n),open=!!BKX[L.id],tot=cl?cl.reduce((a,c)=>a+c.now,0):0,seats=cl?cl.reduce((a,c)=>a+c.s,0):(f.seats||t[3]),fin=cl?cl.reduce((a,c)=>a+c.fin,0):0,pc=seats?Math.round(100*tot/seats):0,m=ffCur(L.id),lock=L.dep<n+BKCL;
+    h+='<div class="card" style="padding:10px 12px"><div class="row" data-bkx="'+L.id+'" style="cursor:pointer"><span><b>'+(L.dir?r.d+' → '+r.o:r.o+' → '+r.d)+'</b> <span class="mut">'+hhmm(L.dep)+' UTC · in '+fmtD(L.dep-n)+'</span></span><span><b>'+tot+'</b><span class="mut">/'+seats+'</span> <span class="mut">'+(open?'▴':'▾')+'</span></span></div>'
+     +'<div style="height:5px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden"><div style="width:'+Math.min(100,pc)+'%;height:100%;background:var(--teal,#2dd4bf)"></div></div>';
+    if(open){h+='<div class="mut" style="margin-top:8px;font-size:12px">Booked by class, and where it should end up at departure</div>'
+       +(cl?cl.map(c=>{const p=Math.round(100*c.now/c.s),q=Math.round(100*c.fin/c.s);return'<div style="margin-top:6px"><div class="row"><span>'+CN[c.k]+'</span><span><b>'+c.now+'</b> <span class="mut">/ '+c.s+' · expected '+c.fin+' ('+q+'%)</span></span></div><div style="height:5px;border-radius:3px;background:var(--line);margin-top:3px;overflow:hidden"><div style="width:'+Math.min(100,p)+'%;height:100%;background:var(--'+(q>=90?'teal':q<50?'red':'amber')+',#2dd4bf)"></div></div></div>'}).join(''):'<div class="mut">Class detail is not available for this aircraft.</div>')
+       +'<div class="row" style="margin-top:10px"><span>Fare <b>'+usd(Math.round(r.fare*m))+'</b> <span class="mut">'+(m===1?'normal':(m>1?'+':'')+Math.round((m-1)*100)+'%')+'</span></span></div>'
+       +(lock?'<div class="mut" style="font-size:12px;margin-top:4px">Fares are locked: bookings close at check-in.</div>':'<div class="row" style="gap:4px;margin-top:6px;justify-content:flex-start">'+[[-10,'−10%'],[-5,'−5%'],[5,'+5%'],[10,'+10%']].map(x=>'<button data-ffm="'+L.id+'|'+x[0]+'|'+r.id+'|'+L.dep+'" style="padding:5px 9px">'+x[1]+'</button>').join('')+(m!==1?'<button data-ffm="'+L.id+'|0|'+r.id+'|'+L.dep+'" style="padding:5px 9px">Reset</button>':'')+'</div><div class="mut" style="font-size:12px;margin-top:4px">A fare change only affects seats not yet sold.</div>')}
+    h+='</div>'});
+  h+='<div class="card"><b>Smart pricing</b><div class="mut" style="margin:4px 0 8px">Raises fares on flights that would sell out and returns them to normal on the rest. Costs 2% of the ticket revenue on flights it prices.</div>'
+    +S.routes.map(r=>{const lv=r.sp|0;return'<div style="margin-top:8px"><div class="mut" style="font-size:12px">'+r.o+' - '+r.d+' · '+r.reg+'</div><div class="row" style="gap:4px;margin-top:3px;justify-content:flex-start">'+FFN.map((x,i)=>'<button data-spr="'+r.id+'|'+i+'"'+(i===lv?' class="pri"':'')+' style="padding:5px 8px">'+x+'</button>').join('')+'</div></div>'}).join('')+'</div>';
+  return h}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-bkx]');if(!b)return;BKX[b.dataset.bkx]=!BKX[b.dataset.bkx];render()});
+document.addEventListener('change',e=>{if(e.target.id==='bk_rt'){BKF=e.target.value;render()}});
 /* ---------- generative in-game music (no audio files) ---------- */
 const MUSX={ctx:null,m:null,rv:null,t:0,beat:0,bar:0,timer:null,on:false};
 const MUSST={calm:{n:'Calm',bpm:66,wave:'triangle',pad:900,ch:[[0,4,7,11],[-3,0,4,7],[-7,-3,0,4],[-5,-1,2,7]],sc:[0,2,4,7,9],arp:.55,perc:0},
