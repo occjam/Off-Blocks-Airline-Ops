@@ -180,7 +180,7 @@ const lvBase=src=>new Promise(res=>{if(LVI.base[src])return res(LVI.base[src]);c
 const PHOTOS_OFF={B39M:{src:'img/B39M_photo.webp',by:'Clemens Vasters',lic:'CC BY 2.0',lu:'https://creativecommons.org/licenses/by/2.0/',url:'https://commons.wikimedia.org/wiki/File:N7379E_-_Boeing_737_MAX_9.jpg',n:'Boeing 737 MAX 9'}};
 const PHOTOS={};
 /* types with a finished Off Blocks livery render: shown as-is, no repaint */
-const LVNAT={B38M:1,B39M:1,A318:1,A319:1,A320:1,A321:1,A19N:1,A20N:1,A21N:1,A21X:1};
+const LVNAT={B38M:1,B39M:1,A318:1,A319:1,A320:1,A321:1,A19N:1,A20N:1,A21N:1,A21X:1,A332:1,A333:1,A338:1,A339:1,A343:1,A346:1,A359:1,A35K:1};
 const lvSrc=(c,v,l)=>LVI.cache[lvKey(c,v,l)]||'img/'+c+(v==='s'?'_side':'')+'.webp';
 /* natural white: the renders come out blue-grey, so lift and neutralise every light, low-saturation pixel (windows, gear and dark detail are left alone) */
 function lvRefL(d,A){const a=[];for(let i=0;i<A.length;i+=7){if(!A[i])continue;const j=i*4,r=d[j],g=d[j+1],b=d[j+2],mx=Math.max(r,g,b),lu=.3*r+.59*g+.11*b;if(lu>110&&(mx-Math.min(r,g,b))/(mx||1)<.36)a.push(lu)}if(!a.length)return 190;a.sort((p,q)=>p-q);return a[a.length>>1]}
