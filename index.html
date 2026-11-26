@@ -177,7 +177,10 @@ function lvTeal(r,g,b){const mx=Math.max(r,g,b),mn=Math.min(r,g,b);if(mx<90)retu
 const lvKey=(c,v,l)=>c+'|'+v+'|'+l.c1+l.c2+l.p+l.l+(v==='s'?l.n||'':'');
 const lvBase=src=>new Promise(res=>{if(LVI.base[src])return res(LVI.base[src]);const im=new Image();im.onload=()=>{LVI.base[src]=im;res(im)};im.onerror=()=>res(null);im.src=src});
 /* licensed photographs shown on market listings only (no livery repaint). Once you own the type, the livery render is used. Credit is shown beside the photo and in Settings. */
-const PHOTOS={B39M:{src:'img/B39M_photo.webp',by:'Clemens Vasters',lic:'CC BY 2.0',lu:'https://creativecommons.org/licenses/by/2.0/',url:'https://commons.wikimedia.org/wiki/File:N7379E_-_Boeing_737_MAX_9.jpg',n:'Boeing 737 MAX 9'}};
+const PHOTOS_OFF={B39M:{src:'img/B39M_photo.webp',by:'Clemens Vasters',lic:'CC BY 2.0',lu:'https://creativecommons.org/licenses/by/2.0/',url:'https://commons.wikimedia.org/wiki/File:N7379E_-_Boeing_737_MAX_9.jpg',n:'Boeing 737 MAX 9'}};
+const PHOTOS={};
+/* types with a finished Off Blocks livery render: shown as-is, no repaint */
+const LVNAT={B38M:1,B39M:1};
 const lvSrc=(c,v,l)=>LVI.cache[lvKey(c,v,l)]||'img/'+c+(v==='s'?'_side':'')+'.webp';
 /* natural white: the renders come out blue-grey, so lift and neutralise every light, low-saturation pixel (windows, gear and dark detail are left alone) */
 function lvRefL(d,A){const a=[];for(let i=0;i<A.length;i+=7){if(!A[i])continue;const j=i*4,r=d[j],g=d[j+1],b=d[j+2],mx=Math.max(r,g,b),lu=.3*r+.59*g+.11*b;if(lu>110&&(mx-Math.min(r,g,b))/(mx||1)<.36)a.push(lu)}if(!a.length)return 190;a.sort((p,q)=>p-q);return a[a.length>>1]}
@@ -237,7 +240,7 @@ async function lvSide(im,l,code){const w=im.naturalWidth,h=im.naturalHeight,cv=d
     if(od){const oa=od[j+3]/255;if(oa>.02){const oc=[od[j],od[j+1],od[j+2]];if(al){col=[c1[0]+(oc[0]-c1[0])*oa,c1[1]+(oc[1]-c1[1])*oa,c1[2]+(oc[2]-c1[2])*oa]}else{col=oc;al=oa}}}
     if(!al)continue;const k=Math.max(.55,Math.min(1.12,lu/ref));d[j]+=(col[0]*k-r)*al;d[j+1]+=(col[1]*k-gg)*al;d[j+2]+=(col[2]*k-b)*al}
   g.putImageData(id,0,0);return cv}
-async function lvMake(c,v,l){const key=lvKey(c,v,l);if(LVI.cache[key])return LVI.cache[key];const im=await lvBase('img/'+c+(v==='s'?'_side':'')+'.webp');if(!im)return null;
+async function lvMake(c,v,l){if(LVNAT[c])return 'img/'+c+(v==='s'?'_side':'')+'.webp';const key=lvKey(c,v,l);if(LVI.cache[key])return LVI.cache[key];const im=await lvBase('img/'+c+(v==='s'?'_side':'')+'.webp');if(!im)return null;
   const cv=v==='s'?await lvSide(im,l,c):lvQ(im,l);return await new Promise(res=>cv.toBlob(b=>{if(!b)return res(null);LVI.cache[key]=URL.createObjectURL(b);res(LVI.cache[key])},'image/png'))}
 function lvLiv(rid){return rid!==''&&rid!=null&&typeof AIC!=='undefined'&&AIC[+rid]?aiLiv(AIC[+rid]):LV()}
 function lvPump(){if(LVI.busy||!LVI.q.length)return;LVI.busy=1;const el=LVI.q.shift();const[c,v,rid]=(el.dataset.lvc||'').split('|'),l=lvLiv(rid);
