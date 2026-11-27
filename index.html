@@ -1303,17 +1303,22 @@ function mapInfo0(){const el=$('#minfo');if(!el)return;MPREV=null;
     const fno=fltNo(S.name,a.r.id,a.dir+2*(+String(a.lid||'').split(':')[2]||0));let fin='';try{const e=econ(a.r,a.f,a.t,a.dir,rng(hs(a.lid))(),a.dep),pf=e.rev-e.cost,g=pf>=0;fin='<div class="mut" style="margin-top:6px">Passengers <b style="color:var(--tx)">'+e.pax+' / '+e.seats+'</b> ('+Math.round(e.pax/Math.max(1,e.seats)*100)+'% full)</div><div class="mut">Fare about <b style="color:var(--tx)">$'+Math.round(a.r.fare)+'</b> · revenue $'+Math.round(e.rev).toLocaleString()+'</div><div class="mut">Cost $'+Math.round(e.cost).toLocaleString()+'</div><div class="mut">Profit this flight <b style="color:'+(g?'#4ade80':'#f87171')+'">'+(g?'+':'-')+'$'+Math.abs(Math.round(pf)).toLocaleString()+'</b> ('+(e.rev>0?Math.round(pf/e.rev*100):0)+'% margin)</div>'}catch(x){}
     el.innerHTML=card(frCard(th(a.t,a.f.lv,1),'<div class="row"><b>'+fno+'</b><span class="badge" style="color:var(--teal)">'+a.f.reg+'</span></div>','<div class="mut">'+(S.name||'')+' · '+a.t[1]+'</div><div style="margin-top:2px"><b>'+o.iata+' → '+d.iata+'</b> <span class="mut">'+o.city+' to '+d.city+'</span></div>',mapFS(o,d,a.p,a.t,a.arr,'a')+holdTxt(a.h,a.p,d.iata),mapFS(o,d,a.p,a.t,a.arr,'b')+fin));return}
   const k=MSEL.ap,Pp=AP[k];if(!Pp){el.innerHTML='';return}const base=S.base,isBase=k===base,hub=(S.hubs||[]).includes(k);
-  let h='<div class="row"><b>'+Pp.iata+' · '+Pp.city+'</b><span class="mut">'+Pp.cc+(hub?' · your hub':'')+'</span></div>';
-  h+='<div class="mut" style="margin-top:4px">Runway grade '+Pp.grade+' · population '+(Pp.pop>=1e6?(Pp.pop/1e6).toFixed(1)+'M':Math.round(Pp.pop/1e3)+'k')+'</div>'+wxLine(k)+(typeof rwyLine==='function'?rwyLine(k):'');
+  let bs='',dt='';const wl=wxLine(k)+(typeof rwyLine==='function'?rwyLine(k):'');bs+=wl;
+  const RW=(typeof RWY!=='undefined'&&RWY[k])||[],act=(()=>{try{return rwyActive(k,now())}catch(e){return null}})();
+  dt+='<div class="mut" style="margin-top:6px">Runway grade <b style="color:var(--tx)">'+Pp.grade+'</b> · population <b style="color:var(--tx)">'+(Pp.pop>=1e6?(Pp.pop/1e6).toFixed(1)+'M':Math.round(Pp.pop/1e3)+'k')+'</b></div>';
+  if(RW.length){const rows=RW.map(r=>{const dx=r[2]-r[0],dy=r[3]-r[1],m=Math.hypot(dx,dy),h1=(Math.atan2(dx,dy)*180/Math.PI+360)%360,h2=(h1+180)%360,i1=r[5]||'',i2=r[6]||'',on=act&&act.r===r,f3=v=>String(Math.round(v)%360||360).padStart(3,'0');
+      return'<div class="row" style="padding:3px 0;border-top:1px solid var(--line)"><span><b style="color:'+(on?'var(--teal)':'var(--tx)')+'">'+(i1&&i2?i1+'/'+i2:i1||i2||'RWY')+'</b>'+(on?' <span class="mut">in use '+act.id+'</span>':'')+'</span><span class="mut">'+Math.round(m).toLocaleString()+' m · '+Math.round(m*3.281).toLocaleString()+' ft · '+f3(h1)+'°/'+f3(h2)+'°</span></div>'}).join('');
+    dt+='<div style="margin-top:8px"><div class="mut" style="margin-bottom:2px">Runways ('+RW.length+')</div>'+rows+'</div>'}
+  else dt+='<div class="mut" style="margin-top:6px">No runway data for this airport.</div>';
   if(!isBase&&base&&AP[base]){const d=nm(base,k),pr=PAIR[base+'|'+k];MPREV=[base,k];
     if(d!=null&&pr){const rf=refFare(d,base,k),rt=hasRights(k),tr=trOk(base,k);
-      h+='<div style="margin-top:6px">'+base+' → '+k+': <b>'+d.toLocaleString()+' nm</b> · demand ~<b>'+pr[3]+'</b> pax/day · ref fare <b>$'+rf+'</b></div>';
-      h+='<div class="mut" style="margin-top:2px">'+(rt?'Station open':'Needs a station')+' · '+(tr?'traffic rights OK':'needs traffic rights')+'</div>';
-      h+='<div style="margin-top:8px"><button id="mnew" data-d="'+k+'" style="background:var(--teal);color:#06241f;border:0;border-radius:8px;padding:8px 14px;font-weight:700">Create route</button></div>'}
-    else h+=researchBlock(base,k)}
-  else if(isBase)h+='<div class="mut" style="margin-top:6px">This is your current base. Tap another airport to plan a route.</div>';
-  if(typeof RWY!=='undefined'&&RWY[k])h+='<div style="margin-top:8px"><button id="mzap" style="border-radius:8px;padding:8px 14px;font-weight:700">Zoom to airfield</button></div>';
-  el.innerHTML=card(h)}
+      bs+='<div style="margin-top:6px">'+base+' → '+k+': <b>'+d.toLocaleString()+' nm</b></div><div class="mut">demand ~<b style="color:var(--tx)">'+pr[3]+'</b> pax/day · ref fare <b style="color:var(--tx)">$'+rf+'</b></div>';
+      dt+='<div class="mut" style="margin-top:8px">'+(rt?'Station open':'Needs a station')+' · '+(tr?'traffic rights OK':'needs traffic rights')+'</div>';
+      bs+='<div style="margin-top:8px"><button id="mnew" data-d="'+k+'" style="background:var(--teal);color:#06241f;border:0;border-radius:8px;padding:8px 14px;font-weight:700">Create route</button></div>'}
+    else bs+=researchBlock(base,k)}
+  else if(isBase)bs+='<div class="mut" style="margin-top:6px">This is your current base. Tap another airport to plan a route.</div>';
+  if(RW.length)bs+='<div style="margin-top:8px"><button id="mzap" style="border-radius:8px;padding:8px 14px;font-weight:700">Zoom to airfield</button></div>';
+  el.innerHTML=card(frCard('','<div class="row"><b style="font-size:18px">'+Pp.iata+'</b><span class="badge">'+Pp.cc+'</span></div>','<div class="mut">'+Pp.city+(hub?' · your hub':isBase?' · your base':'')+'</div>',bs,dt))}
 const CATK={Regional:[.78,.8],Narrow:[1,1],Mid:[1.15,1.12],Wide:[1.5,1.32]},catS=c=>{const k=CATK[c]||CATK.Narrow;return ' scale('+k[0]+' '+k[1]+')'};
 const PLANE='M10,0C10,-1.2 9,-1.6 7,-1.6L1,-1.6L-3,-8L-5.5,-8L-3.5,-1.6L-8,-1.6L-9.5,-4L-11,-4L-10,0L-11,4L-9.5,4L-8,1.6L-3.5,1.6L-5.5,8L-3,8L1,1.6L7,1.6C9,1.6 10,1.2 10,0Z';
 function sunPos(){const d=new Date(now()),doy=(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-Date.UTC(d.getUTCFullYear(),0,0))/864e5,
