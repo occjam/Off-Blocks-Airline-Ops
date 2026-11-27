@@ -1180,7 +1180,7 @@ function mapQuick(){if(MS.proj==='globe'){MQ=.55;clearTimeout(MQT);MQT=setTimeou
 function apVis(A,k,ke){if(A.tier===1)return 1;if(MSEL&&MSEL.ap===k)return 1;if(A.tier===2)return ke>=1.6||MHUB.has(k);return ke>=4.5||MHUB.has(k)}
 let MHUB=new Set(),MDL=[];
 function mapTap(cx,cy){const [x,y]=mapAt(cx,cy);let best=null,bd=22;
-  if(typeof MGA!=='undefined'&&MGA.length){let gb=null,gd=28;MGA.forEach(g=>{const d=Math.hypot(g.X-x,g.Y-y);if(d<gd){gd=d;gb=g}});if(gb){GH=gb.hub;MSEL=null;mapInfo();AO(gnFlightCard(gb.id));return}}
+  if(typeof MGA!=='undefined'&&MGA.length){let gb=null,gd=34;MGA.forEach(g=>{const d=Math.hypot(g.X-x,g.Y-y);if(d<gd){gd=d;gb=g}});if(gb){GH=gb.hub;GNX=gb.id;MSEL=null;mapInfo();AO(gnFlightCard(gb.id));return}}
   (MFL||[]).forEach(a=>{const d=Math.hypot(a.X-x,a.Y-y);if(d<bd){bd=d;best={fl:a}}});
   if(!best){bd=20;(MDL||[]).forEach(r=>{const d=Math.hypot(r.X-x,r.Y-y);if(d<bd){bd=d;best={dl:r.k}}})}
   if(!best){bd=16;(RFL||[]).forEach(r=>{const d=Math.hypot(r.X-x,r.Y-y);if(d<bd){bd=d;best={rv:r.a.key}}})}
