@@ -2548,7 +2548,10 @@ const INC_LY={},INC_FL={};let MGA=[];
 function incLay(hub){if(INC_LY[hub]!==undefined)return INC_LY[hub];const R=typeof RWY!=='undefined'&&RWY[hub];if(!R||!R.length)return INC_LY[hub]=null;
   const r=R[0],A=[r[0],r[1]],B=[r[2],r[3]],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy),u=[dx/L,dy/L],v=[-u[1],u[0]],d=-(A[0]*v[0]+A[1]*v[1]),side=Math.abs(d)>60?(d>0?1:-1):(hs('sd'+hub)%2?1:-1);
   return INC_LY[hub]={R,A,B,L,u,w:[v[0]*side,v[1]*side],t0:hs('dr'+hub+dayIdx(now()))%2?.04:.96}}
-function incFl(hub,n){const k=Math.floor(n/15000),c=INC_FL[hub];if(c&&c.k===k)return c.L;const B=gnBoard(hub,n),TN=60*MIN,cf=gnCfg(hub),NS=Math.max(4,Math.min(14,cf.st|0)),L=B.L.filter(x=>!x.cx).map(x=>({id:x.id,own:x.own,arr:x.dep-TN+x.ib*MIN,real:x.dep+x.tot*MIN})).sort((a,b)=>a.arr-b.arr),busy=Array(NS).fill(-1e18);
+const INL={Regional:30,Narrow:38,Mid:56,Wide:66,A388:73,B748:71,B744:70,A346:75,B77W:74,A359:67,B789:63,B788:57,A333:64,A332:59,B763:55,B772:64,E190:36,E170:30,E175:32,AT76:27,DH8D:33,CRJ9:36,CRJ7:32,CRJ2:27,A21N:44,A321:44,B739:42,B38M:39,B737:34,A319:34,A19N:34,B752:47,B753:55};
+function incLen(t){return t?INL[t[0]]||INL[t[2]]||38:38}
+function incCol(name){try{const c=AIC.find(x=>x.name===name);return c?aiColC(c):'#cbd5e1'}catch(e){return'#cbd5e1'}}
+function incFl(hub,n){const k=Math.floor(n/15000),c=INC_FL[hub];if(c&&c.k===k)return c.L;const B=gnBoard(hub,n),TN=60*MIN,cf=gnCfg(hub),NS=Math.max(4,Math.min(14,cf.st|0)),L=B.L.filter(x=>!x.cx).map(x=>({id:x.id,own:x.own,arr:x.dep-TN+x.ib*MIN,real:x.dep+x.tot*MIN,len:incLen(x.t),col:x.own?(typeof acc==='function'?acc():'#2dd4bf'):incCol(x.who)})).sort((a,b)=>a.arr-b.arr),busy=Array(NS).fill(-1e18);
   L.forEach(f=>{let s=hs(String(f.id))%NS,k2=0;while(k2<NS&&busy[s]>f.arr-6*MIN){s=(s+1)%NS;k2++}f.st=k2<NS?s:-1;if(f.st>=0)busy[f.st]=f.real+6*MIN});INC_FL[hub]={k,L};return L}
 function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><pattern id="inch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="#e5484d"/></pattern></defs>';
   const DG=180/Math.PI;
@@ -2570,24 +2573,24 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
       if(wpx>=6){g+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#e2e8f0" stroke-width="'+Math.max(.8,.9*s*1).toFixed(1)+'" stroke-dasharray="'+(30*s).toFixed(1)+' '+(20*s).toFixed(1)+'"/>';
         [[p1,rr[5],th,1],[p2,rr[6],th+180,-1]].forEach(([p,id,a2,sg])=>{const d=Math.hypot(p2[0]-p1[0],p2[1]-p1[1])||1,ux=(p2[0]-p1[0])/d*sg,uy=(p2[1]-p1[1])/d*sg,tx=p[0]+ux*Math.min(70*s,d/4),ty=p[1]+uy*Math.min(70*s,d/4);g+='<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" font-size="'+Math.min(26,Math.max(8,22*s*3)).toFixed(1)+'" font-weight="700" fill="#e2e8f0" font-family="ui-monospace,monospace" transform="rotate('+(a2+90).toFixed(1)+' '+tx.toFixed(1)+' '+ty.toFixed(1)+')">'+id+'</text>'})}});
     const minL=ke>=2500?10:0,ps=Math.max(38*s,minL)/14.5;
-    const ac=(e,nn,dx,dy,c,sc,op,id)=>{const p=X(e,nn);if(id)MGA.push({id,hub,X:p[0],Y:p[1]});const ang=Math.atan2(-dy,dx)*DG+90;return'<g transform="translate('+p[0].toFixed(1)+' '+p[1].toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+(ps*(sc||1)).toFixed(3)+')" fill="'+c+'" stroke="#06101a" stroke-width=".7" opacity="'+(op==null?1:op).toFixed(2)+'"><path d="M0-7L1.6-2 8 1.5V3L1.6 1.5 1.2 5 3.4 6.4V7.5L0 6.7-3.4 7.5V6.4L-1.2 5-1.6 1.5-8 3V1.5L-1.6-2Z"/></g>'};
+    const ac=(e,nn,dx,dy,c,sc,op,id,len)=>{const p=X(e,nn);if(id)MGA.push({id,hub,X:p[0],Y:p[1]});const ang=Math.atan2(-dy,dx)*DG,lm=len||38,pl=Math.max(lm*s*(sc||1),minL*Math.sqrt(lm/38)*(sc||1))/21;return'<g transform="translate('+p[0].toFixed(1)+' '+p[1].toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+pl.toFixed(3)+')" fill="'+c+'" stroke="#06101a" stroke-width=".9" opacity="'+(op==null?1:op).toFixed(2)+'"><path d="'+PLANE+'"/></g>'};
     const path=(pts,f)=>{const m=pts.map(p=>pos(p[0],p[1])),cum=[0];for(let k=1;k<m.length;k++)cum.push(cum[k-1]+Math.hypot(m[k][0]-m[k-1][0],m[k][1]-m[k-1][1]));const tot=cum[cum.length-1],d=Math.max(0,Math.min(1,f))*tot;let k=1;while(k<m.length-1&&cum[k]<d)k++;const sg=cum[k]-cum[k-1]||1,r=(d-cum[k-1])/sg;return{e:m[k-1][0]+(m[k][0]-m[k-1][0])*r,n:m[k-1][1]+(m[k][1]-m[k-1][1])*r,dx:m[k][0]-m[k-1][0],dy:m[k][1]-m[k-1][1]}};
     if(ke>=2500&&full){
       if(isHub){const FL=incFl(hub,n),dT=t0<.5?1:-1,tE=t0<.5?1:0;let hold=0;
-        FL.forEach(f=>{const ts=f.st>=0?tS(f.st):.5,c=f.own?'#2dd4bf':'#cbd5e1',tp=(n-f.real)/1000,td=f.arr-240000;
-          if(n>=f.arr&&n<f.real){g+=ac(...(()=>{const p=pos(ts,235);return[p[0],p[1],w[0],w[1]]})(),c,1,1,f.id)}
-          else if(n>=f.real&&n<f.real+240000&&f.st>=0){const q2=path([[ts,235],[ts,170],[t0,170],[t0,0]],(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id)}
-          else if(!i&&n>=f.real+240000&&n<f.real+285000){const fr=Math.pow((n-f.real-240000)/45000,1.8),q2=path([[t0,0],[tE,0]],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id)}
-          else if(!i&&n>=f.real+285000&&n<f.real+375000){const fr=(n-f.real-285000)/90000,p=pos(tE+dT*fr*3000/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1+.5*fr,1-fr,f.id)}
-          else if(!i&&n>=td-60000&&n<td){const fr=(n-td+60000)/60000,tt=t0+dT*.12,p=pos(tt-dT*(1-fr)*2800/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1.4-.4*fr,1,f.id)}
-          else if(!i&&n>=td&&n<td+40000){const fr=1-Math.pow(1-(n-td)/40000,2),q2=path([[t0+dT*.12,0],[.5,0]],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id)}
-          else if(n>=td+40000&&n<f.arr&&f.st>=0){const q2=path([[.5,0],[.5,170],[ts,170],[ts,235]],(n-td-40000)/(f.arr-td-40000));g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id)}
+        FL.forEach(f=>{const ts=f.st>=0?tS(f.st):.5,c=f.col,tp=(n-f.real)/1000,td=f.arr-240000;
+          if(n>=f.arr&&n<f.real){g+=ac(...(()=>{const p=pos(ts,235);return[p[0],p[1],w[0],w[1]]})(),c,1,1,f.id,f.len)}
+          else if(n>=f.real&&n<f.real+240000&&f.st>=0){const q2=path([[ts,235],[ts,170],[t0,170],[t0,0]],(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
+          else if(!i&&n>=f.real+240000&&n<f.real+285000){const fr=Math.pow((n-f.real-240000)/45000,1.8),q2=path([[t0,0],[tE,0]],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
+          else if(!i&&n>=f.real+285000&&n<f.real+375000){const fr=(n-f.real-285000)/90000,p=pos(tE+dT*fr*3000/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1+.5*fr,1-fr,f.id,f.len)}
+          else if(!i&&n>=td-60000&&n<td){const fr=(n-td+60000)/60000,tt=t0+dT*.12,p=pos(tt-dT*(1-fr)*2800/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1.4-.4*fr,1,f.id,f.len)}
+          else if(!i&&n>=td&&n<td+40000){const fr=1-Math.pow(1-(n-td)/40000,2),q2=path([[t0+dT*.12,0],[.5,0]],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
+          else if(n>=td+40000&&n<f.arr&&f.st>=0){const q2=path([[.5,0],[.5,170],[ts,170],[ts,235]],(n-td-40000)/(f.arr-td-40000));g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           if(i&&f.arr>=i.from-10*MIN&&f.arr<=i.until)hold++});
         if(i&&i.mode!=='divert')for(let k=0;k<Math.min(4,hold);k++){const cp=pos(t0-dT*5000/L,0),an=n/20000+k*Math.PI/2;g+=ac(cp[0]+Math.cos(an)*1000,cp[1]+Math.sin(an)*1000,-Math.sin(an),Math.cos(an),'#f2b84b')}}
-      else{const m=3+hs(hub+'p')%4;for(let k=0;k<Math.min(NS,m);k++){const p=pos(tS((k*5)%NS),235);g+=ac(p[0],p[1],w[0],w[1],'#94a3b8')}}}
+      }
     if(i){const ph=(n%1400)/1400,cp=pos(.6,-90),c2=X(cp[0],cp[1]);
       [[.04,0],[.96,0]].forEach(([t])=>{const c=X(...pos(t,0)),r=Math.max(8,45*s);g+='<g stroke="#ff4d52" stroke-width="2.2"><line x1="'+(c[0]-r).toFixed(1)+'" y1="'+(c[1]-r).toFixed(1)+'" x2="'+(c[0]+r).toFixed(1)+'" y2="'+(c[1]+r).toFixed(1)+'"/><line x1="'+(c[0]-r).toFixed(1)+'" y1="'+(c[1]+r).toFixed(1)+'" x2="'+(c[0]+r).toFixed(1)+'" y2="'+(c[1]-r).toFixed(1)+'"/></g>'});
-      if(ke>=2500){g+=ac(cp[0],cp[1],u[0]+w[0]*.6,u[1]+w[1]*.6,'#ffb3b5',1.15);for(let k=0;k<4;k++){const an=k*1.57+.6,vp=X(cp[0]+Math.cos(an)*55,cp[1]+Math.sin(an)*55);g+='<circle cx="'+vp[0].toFixed(1)+'" cy="'+vp[1].toFixed(1)+'" r="'+Math.max(2.4,6*s).toFixed(1)+'" fill="'+(((Math.floor(n/300)+k)%2)?'#ef4444':'#3b82f6')+'"/>'}}
+      if(ke>=2500){g+=ac(cp[0],cp[1],u[0]+w[0]*.6,u[1]+w[1]*.6,'#ffb3b5',1,1,0,60);for(let k=0;k<4;k++){const an=k*1.57+.6,vp=X(cp[0]+Math.cos(an)*55,cp[1]+Math.sin(an)*55);g+='<circle cx="'+vp[0].toFixed(1)+'" cy="'+vp[1].toFixed(1)+'" r="'+Math.max(2.4,6*s).toFixed(1)+'" fill="'+(((Math.floor(n/300)+k)%2)?'#ef4444':'#3b82f6')+'"/>'}}
       g+='<circle cx="'+c2[0].toFixed(1)+'" cy="'+c2[1].toFixed(1)+'" r="'+(8+22*ph).toFixed(1)+'" fill="#e5484d" opacity="'+(.7*(1-ph)).toFixed(2)+'"/><circle cx="'+c2[0].toFixed(1)+'" cy="'+c2[1].toFixed(1)+'" r="5" fill="#e5484d" stroke="#fff" stroke-width="1.5"/>'}
     g+='</g>';
     const lx=q[0],ly=Math.min(...[X(...pos(0,0))[1],X(...pos(1,0))[1],X(...pos(.5,565))[1]])-14;
