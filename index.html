@@ -1098,6 +1098,13 @@ function gcPt(a,b,f){const la1=a.lat*RAD,lo1=a.lon*RAD,la2=b.lat*RAD,lo2=b.lon*R
   if(d<1e-6)return[a.lat,a.lon];const A=Math.sin((1-f)*d)/Math.sin(d),B=Math.sin(f*d)/Math.sin(d);
   const x=A*Math.cos(la1)*Math.cos(lo1)+B*Math.cos(la2)*Math.cos(lo2),y=A*Math.cos(la1)*Math.sin(lo1)+B*Math.cos(la2)*Math.sin(lo2),z=A*Math.sin(la1)+B*Math.sin(la2);
   return[Math.atan2(z,Math.hypot(x,y))/RAD,Math.atan2(y,x)/RAD]}
+let EVA={t:-1,L:[]};
+function evAct(){const n=Math.floor(now()/1000);if(EVA.t===n)return EVA.L;EVA.t=n;try{EVA.L=typeof evAll==='function'?evAll(now()).filter(e=>e.k!=='fue'&&e.k!=='stk'&&e.k!=='clo'&&now()>=e.a&&now()<e.b&&e.r1>0):[]}catch(x){EVA.L=[]}return EVA.L}
+/* flown path: the great circle, bent around any active storm so the aircraft steers clear of its core (blended out near both airports) */
+function gcPtD(a,b,f){const p=gcPt(a,b,f),E=evAct();if(!E.length)return p;const w=Math.min(1,Math.min(f,1-f)/.12);if(w<=0)return p;let la=p[0],lo=p[1];
+  for(const e of E){const R=Math.min(e.r2||e.r1*2,e.r1*1.5+40),cl=Math.cos(e.lat*RAD),dx=((lo-e.lon+540)%360-180)*111.2*cl,dy=(la-e.lat)*111.2,dist=Math.hypot(dx,dy);if(dist>=R)continue;
+    const k=dist<1e-3?[0,1]:[dx/dist,dy/dist],nx=k[0]*R,ny=k[1]*R,tx=dx+(nx-dx)*w,ty=dy+(ny-dy)*w;lo=e.lon+tx/(111.2*cl);la=e.lat+ty/111.2}
+  return[la,lo]}
 function gcPath(a,b){let s='',pl=null;for(let i=0;i<=48;i++){const p=gcPt(a,b,i/48),X=mx(p[1]),Y=my(p[0]);s+=(pl===null||Math.abs(p[1]-pl)>180?'M':'L')+X.toFixed(1)+' '+Y.toFixed(1);pl=p[1]}return s}
 function airFlight(f){if(!NETOK||(f.mx&&now()<f.mx.until))return null;const t=TY[f.code],n=now();
   for(const r of S.routes){if(r.reg!==f.reg)continue;const g=geom(r,t);if(!g)continue;
@@ -1110,7 +1117,7 @@ function airFlight(f){if(!NETOK||(f.mx&&now()<f.mx.until))return null;const t=TY
 const MS={proj:'flat',style:'esri',cx:-77,cy:18,k:3,R:200,night:1,W:360,H:500,sel:null},MP={};
 function rvAcInfo(a){let f;try{f=aiFlt(a)}catch(e){return''}const g=f.prof>=0;
   return(f.dm?'<div class="mut" style="margin-top:6px;color:#fbbf24">Delayed '+f.dm+' min · costs about $'+Math.round(f.dc).toLocaleString()+'</div>':'')+'<div class="mut" style="margin-top:6px">Aircraft <b style="color:var(--tx)">'+a.code+' · '+f.t[1]+'</b></div><div class="mut">Passengers <b style="color:var(--tx)">'+f.pax+' / '+f.seats+'</b> ('+Math.round(f.lf*100)+'% full)</div><div class="mut">Fare about <b style="color:var(--tx)">$'+Math.round(f.fare)+'</b> · revenue $'+Math.round(f.rev).toLocaleString()+' this flight</div><div class="mut">Profit this flight <b style="color:'+(g?'#4ade80':'#f87171')+'">'+(g?'+':'-')+'$'+Math.abs(Math.round(f.prof)).toLocaleString()+'</b> ('+(f.rev>0?Math.round(f.prof/f.rev*100):0)+'% margin)</div>'}
-function mtrk(o,d,p,col){let dd='',pen=0,pl2=null;for(let i=0;i<=40;i++){const gp=gcPt(o,d,p*i/40),qq=P(gp[1],gp[0]);const brk=!qq[2]||(MS.proj==='flat'&&pl2!==null&&Math.abs(gp[1]-pl2)>180);if(brk)pen=0;else{dd+=(pen?'L':'M')+qq[0].toFixed(1)+' '+qq[1].toFixed(1);pen=1}pl2=gp[1]}
+function mtrk(o,d,p,col){let dd='',pen=0,pl2=null;for(let i=0;i<=40;i++){const gp=gcPtD(o,d,p*i/40),qq=P(gp[1],gp[0]);const brk=!qq[2]||(MS.proj==='flat'&&pl2!==null&&Math.abs(gp[1]-pl2)>180);if(brk)pen=0;else{dd+=(pen?'L':'M')+qq[0].toFixed(1)+' '+qq[1].toFixed(1);pen=1}pl2=gp[1]}
   let s='<path d="'+gcLine(o,d,64)+'" fill="none" stroke="'+col+'" stroke-opacity=".75" stroke-width="1.8" stroke-dasharray="5 5"/><path d="'+dd+'" fill="none" stroke="#06101a" stroke-opacity=".55" stroke-width="6" stroke-linecap="round"/><path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="3.4" stroke-linecap="round"/>';
   [[o,1],[d,0]].forEach(([a,f])=>{const q=P(a.lon,a.lat);if(!q[2])return;s+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+')"><circle r="5" fill="'+(f?col:'#0f172a')+'" stroke="#fff" stroke-width="1.6"/><text y="-9" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" stroke="#000" stroke-width="2.6" paint-order="stroke" font-family="ui-monospace,monospace">'+a.iata+'</text></g>'});return s}
 let RFL=[];let MSEL=null,MPREV=null,MFL=[],MPD=0,MP0=null,MRAF=0,MQ=Math.min(window.devicePixelRatio||1,2),MQT=0;const MQ0=()=>Math.min(window.devicePixelRatio||1,2);
@@ -1312,10 +1319,10 @@ function mapUpdate0(){const sv=$('#wm'),cv=$('#mcv');if(!sv||!cv)return;mapSize(
   h+='<g font-family="ui-monospace,monospace" fill="'+lc+'" paint-order="stroke" stroke="'+halo+'" stroke-width="3" stroke-linejoin="round">'+lh+'</g>';
   let rvl='';if(typeof RIVMAP!=='undefined'&&RIVMAP!=null&&AIC&&AIC[RIVMAP]){const c=AIC[RIVMAP];c.rt.forEach(r=>{if(AP[r.o]&&AP[r.d])rvl+='<path d="'+gcLine(AP[r.o],AP[r.d],32)+'" fill="none" stroke="'+aiColC(c)+'" stroke-opacity=".7" stroke-width="1.2"/>'})}
   const L=[];let tr='',pl='';MFL=[];MDL=[];
-  S.fleet.forEach(f=>{const a=airFlight(f);if(!a)return;const o=AP[a.dir?a.r.d:a.r.o],d=AP[a.dir?a.r.o:a.r.d],p=gcPt(o,d,a.p),pp=gcPt(o,d,Math.min(1,a.p+.01)),q=P(p[1],p[0]),q2=P(pp[1],pp[0]);
+  S.fleet.forEach(f=>{const a=airFlight(f);if(!a)return;const o=AP[a.dir?a.r.d:a.r.o],d=AP[a.dir?a.r.o:a.r.d],p=gcPtD(o,d,a.p),pp=gcPtD(o,d,Math.min(1,a.p+.01)),q=P(p[1],p[0]),q2=P(pp[1],pp[0]);
     L.push('<div class="row" style="padding:4px 0;border-bottom:1px solid var(--line)"><span><span class="code">'+f.reg+'</span> '+a.t[1]+'</span><span class="mut">'+o.iata+' → '+d.iata+' · '+fmtD(a.arr-now())+'</span></div>');
     if(!q[2])return;let ang=Math.atan2(q2[1]-q[1],q2[0]-q[0])*DEG;if(!isFinite(ang)||a.p>.99)ang=a.ang||0;if(Math.abs(q2[0]-q[0])>200)ang=a.ang||0;a.ang=ang;MFL.push({f,r:a.r,t:a.t,dir:a.dir,arr:a.arr,p:a.p,X:q[0],Y:q[1]});
-    const sel=MSEL&&MSEL.fl===f.reg;let dd='',pen=0,pl2=null;for(let i=0;i<=24;i++){const gp=gcPt(o,d,a.p*i/24),qq=P(gp[1],gp[0]);const brk=!qq[2]||(MS.proj==='flat'&&pl2!==null&&Math.abs(gp[1]-pl2)>180);if(brk)pen=0;else{dd+=(pen?'L':'M')+qq[0].toFixed(1)+' '+qq[1].toFixed(1);pen=1}pl2=gp[1]}
+    const sel=MSEL&&MSEL.fl===f.reg;let dd='',pen=0,pl2=null;for(let i=0;i<=24;i++){const gp=gcPtD(o,d,a.p*i/24),qq=P(gp[1],gp[0]);const brk=!qq[2]||(MS.proj==='flat'&&pl2!==null&&Math.abs(gp[1]-pl2)>180);if(brk)pen=0;else{dd+=(pen?'L':'M')+qq[0].toFixed(1)+' '+qq[1].toFixed(1);pen=1}pl2=gp[1]}
     if(sel)tr+=mtrk(o,d,a.p,acc());else{tr+='<path d="'+gcLine(o,d,64)+'" fill="none" stroke="'+acc()+'" stroke-opacity=".6" stroke-width="1.4" stroke-dasharray="4 4"/>';
     tr+='<path d="'+dd+'" fill="none" stroke="'+acc()+'" stroke-width="2.4" stroke-opacity=".95"/>'}
     pl+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+(sel?2.1:1.7)+')"><g transform="rotate('+ang.toFixed(1)+')'+catS(a.t[2])+'">'+(sel?'<circle r="14" fill="none" stroke="#fff" stroke-width="1.2"/>':'')+'<path d="'+PLANE+'" fill="'+acc()+'" stroke="#06241f" stroke-width="1.2"/></g></g>'});
@@ -1335,8 +1342,8 @@ function mapUpdate0(){const sv=$('#wm'),cv=$('#mcv');if(!sv||!cv)return;mapSize(
     const kr='r'+c.id+':'+p.due+p.r.o;MDL.push({k:kr,c,p,code:p.r.code,pc:pr,X:q[0],Y:q[1]});
     rdl+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale(1.3)"><g transform="rotate('+ang.toFixed(1)+')'+catS(t[2])+'">'+(MSEL&&MSEL.dl===kr?'<circle r="14" fill="none" stroke="#fff" stroke-width="1.2"/>':'')+'<path d="'+PLANE+'" fill="'+col+'" stroke="#fff" stroke-width="1" stroke-dasharray="2 1.5"/></g></g>'})});
   let rp='',rt2='';RFL=[];if(MS.rv!==0){const act=aiActive(now()),n0=now(),ke=kEff(),sc=ke<4?.5:ke<10?.7:1;let cnt=0;
-    for(const a of act){if(cnt>450)break;const oo=AP[a.o],dd=AP[a.d];if(!oo||!dd)continue;const p=aiPos(a,n0),gp=gcPt(oo,dd,p),q=P(gp[1],gp[0]);if(!q[2]||q[0]<-10||q[0]>W+10||q[1]<-10||q[1]>H+10)continue;
-      const g2=gcPt(oo,dd,Math.min(1,p+.01)),q2=P(g2[1],g2[0]);let ang=Math.atan2(q2[1]-q[1],q2[0]-q[0])*DEG;if(!isFinite(ang)||Math.abs(q2[0]-q[0])>200)ang=0;cnt++;
+    for(const a of act){if(cnt>450)break;const oo=AP[a.o],dd=AP[a.d];if(!oo||!dd)continue;const p=aiPos(a,n0),gp=gcPtD(oo,dd,p),q=P(gp[1],gp[0]);if(!q[2]||q[0]<-10||q[0]>W+10||q[1]<-10||q[1]>H+10)continue;
+      const g2=gcPtD(oo,dd,Math.min(1,p+.01)),q2=P(g2[1],g2[0]);let ang=Math.atan2(q2[1]-q[1],q2[0]-q[0])*DEG;if(!isFinite(ang)||Math.abs(q2[0]-q[0])>200)ang=0;cnt++;
       const sel=MSEL&&MSEL.rv===a.key;RFL.push({a,X:q[0],Y:q[1],p});
       if(sel)rt2+=mtrk(oo,dd,p,aiColC(a.c));
       rp+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+(sel?1.8:sc)+')"><g transform="rotate('+ang.toFixed(1)+')'+catS(TY[a.code]?TY[a.code][2]:'Narrow')+'">'+(sel?'<circle r="13" fill="none" stroke="#fff" stroke-width="1.2"/>':'')+'<path d="'+PLANE+'" fill="'+aiColC(a.c)+'" fill-opacity=".9" stroke="#06241f" stroke-width="1"/></g></g>'}}
