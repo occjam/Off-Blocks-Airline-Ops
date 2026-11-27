@@ -293,7 +293,7 @@ function wxApLoad(){if(typeof AP==='undefined'||!S||!S.base)return;if(WX.apt&&Da
   const cs=new Set([S.base,...(S.hubs||[])]);(S.routes||[]).forEach(r=>{cs.add(r.o);cs.add(r.d)});if(typeof AIC!=='undefined'&&AIC)AIC.forEach(c=>{if(!c.dead)c.hubs.forEach(h=>cs.add(h))});
   const L=[...cs].filter(c=>AP[c]),ch=[];for(let i=0;i<L.length;i+=90)ch.push(L.slice(i,i+90));
   Promise.all(ch.map(c=>fetch('https://api.open-meteo.com/v1/forecast?latitude='+c.map(k=>AP[k].lat.toFixed(2)).join(',')+'&longitude='+c.map(k=>AP[k].lon.toFixed(2)).join(',')+'&current=weather_code,wind_gusts_10m,visibility,wind_speed_10m,wind_direction_10m&wind_speed_unit=kn').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(j=>({c,j:Array.isArray(j)?j:[j]})))).then(rs=>{
-    rs.forEach(({c,j})=>c.forEach((k,i)=>{if(j[i]&&j[i].current)WX.ap[k]=wxSevOf(j[i].current)}));WX.apt=Date.now();WX.aerr=''}).catch(e=>{WX.aerr=String(e&&e.message||e)})}
+    rs.forEach(({c,j})=>c.forEach((k,i)=>{if(j[i]&&j[i].current){const o=wxSevOf(j[i].current);if(j[i].elevation!=null)o.el=j[i].elevation;WX.ap[k]=o}}));WX.apt=Date.now();WX.aerr=''}).catch(e=>{WX.aerr=String(e&&e.message||e)})}
 const wxSev=k=>Math.max((WX.ap[k]&&WX.ap[k].s)||0,typeof evSev==='function'?evSev(k,now()):0);
 const wxLine=k=>{const a=WX.ap[k];return a?'<div class="mut">Weather: <b style="color:'+(a.s>=3?'#f87171':a.s>=2?'#fbbf24':'inherit')+'">'+a.tx+'</b>'+(a.g>=20?' · gusts '+a.g+' kt':'')+(a.v!=null&&a.v<10?' · visibility '+a.v+' km':'')+'</div>':''};
 const wxStatus=()=>'<div class="mut" style="margin:8px 0;font-size:12px">Winds aloft: '+(WX.live?'live, 250 hPa model data (updated '+new Date(WX.gt).toISOString().slice(11,16)+' UTC)':'seasonal jet-stream model (live data unavailable'+(WX.err?': '+WX.err:'')+')')+' · Airport weather: '+(Object.keys(WX.ap).length?'live ('+Object.keys(WX.ap).length+' airports)':'not available'+(WX.aerr?' ('+WX.aerr+')':''))+'</div>';
@@ -342,6 +342,19 @@ function rwyActive(k,tms,Rs){const R=Rs||(typeof RWY!=='undefined'&&RWY[k]);if(!
 function rwyAt(k,t){const st=RWS[k];if(!st)return null;const H=st.hist||[];for(let j=H.length-1;j>=0;j--)if(H[j].t<=t)return{i:H[j].to.i,sg:H[j].to.sg};if(H.length&&t<H[0].t)return{i:H[0].from.i,sg:H[0].from.sg};return{i:st.i,sg:st.sg}}
 function rwyHist(k){return(RWS[k]&&RWS[k].hist)||[]}
 function rwyLine(k){try{const b=rwyActive(k,now());if(!b)return'';const h=rwyHist(k),l=h[h.length-1],ago=l?Math.round((now()-l.t)/60000):0;return'<div class="mut">Runway in use <b style="color:var(--tx)">'+(b.id||Math.round(b.hdg/10))+'</b> · wind '+String(Math.round(b.w.d)).padStart(3,'0')+'° '+Math.round(b.w.s)+' kt ('+(b.w.live?'live':'model')+') · headwind '+Math.max(0,Math.round(b.hw))+' kt'+(l&&ago<180?' · changed from '+l.from.id+' '+ago+' min ago':'')+'</div>'}catch(e){return''}}
+
+/* airport photo + elevation: Wikidata by IATA code (photo from Wikimedia Commons with its credit); elevation also comes free with the airport weather. Cached on the device. */
+const APX={};let APXL=null;
+function apxLoadLS(){if(APXL)return APXL;try{APXL=JSON.parse(localStorage.getItem('ob-apx1')||'{}')}catch(e){APXL={}}return APXL}
+function apxSave(){try{localStorage.setItem('ob-apx1',JSON.stringify(apxLoadLS()))}catch(e){}}
+function apxGet(k){const L=apxLoadLS(),c=L[k];if(c&&Date.now()-c.t<60*864e5)return c;if(!APX[k]){APX[k]={at:0}}const q=APX[k];if(!q.busy&&Date.now()-q.at>10*60000&&navigator.onLine!==false){q.busy=1;q.at=Date.now();apxFetch(k).then(r=>{if(r){L[k]=Object.assign({t:Date.now()},r);apxSave();try{if(typeof MSEL!=='undefined'&&MSEL&&MSEL.ap===k)mapInfo()}catch(e){}}}).catch(()=>{}).finally(()=>{q.busy=0})}return c||null}
+async function apxFetch(k){const sq='SELECT ?img ?el WHERE{?i wdt:P238 "'+k+'". OPTIONAL{?i wdt:P18 ?img} OPTIONAL{?i p:P2044/psn:P2044/wikibase:quantityAmount ?el}} ORDER BY DESC(BOUND(?img)) LIMIT 1',
+    r=await fetch('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(sq));if(!r.ok)return null;const j=await r.json(),b=j.results&&j.results.bindings&&j.results.bindings[0];if(!b)return{};
+  const o={};if(b.el)o.el=Math.round(parseFloat(b.el.value));
+  if(b.img){const fn=decodeURIComponent(b.img.value.split('/').pop());o.img='https://commons.wikimedia.org/wiki/Special:FilePath/'+encodeURIComponent(fn)+'?width=520';
+    try{const m=await fetch('https://commons.wikimedia.org/w/api.php?action=query&titles='+encodeURIComponent('File:'+fn)+'&prop=imageinfo&iiprop=extmetadata&format=json&origin=*'),mj=await m.json(),pg=Object.values(mj.query.pages)[0],x=pg.imageinfo[0].extmetadata,strip=v=>String(v||'').replace(/<[^>]+>/g,'').trim();o.by=strip(x.Artist&&x.Artist.value).slice(0,50);o.lic=strip(x.LicenseShortName&&x.LicenseShortName.value).slice(0,24)}catch(e){}}
+  return o}
+function apElev(k){const a=WX.ap&&WX.ap[k];if(a&&a.el!=null)return Math.round(a.el);const c=apxLoadLS()[k];return c&&c.el!=null?c.el:null}
 
 const LIV=['#2dd4bf','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#34d399','#f472b6','#0ea5a4','#1d4ed8','#b91c1c','#334155'];
 const LIV2=['#ffffff','#0f172a','#fbbf24','#2dd4bf','#f87171','#a3e635'];
@@ -1318,7 +1331,11 @@ function mapInfo0(){const el=$('#minfo');if(!el)return;MPREV=null;
     else bs+=researchBlock(base,k)}
   else if(isBase)bs+='<div class="mut" style="margin-top:6px">This is your current base. Tap another airport to plan a route.</div>';
   if(RW.length)bs+='<div style="margin-top:8px"><button id="mzap" style="border-radius:8px;padding:8px 14px;font-weight:700">Zoom to airfield</button></div>';
-  el.innerHTML=card(frCard('','<div class="row"><b style="font-size:18px">'+Pp.iata+'</b><span class="badge">'+Pp.cc+'</span></div>','<div class="mut">'+Pp.city+(hub?' · your hub':isBase?' · your base':'')+'</div>',bs,dt))}
+  const ax=(typeof apxGet==='function')?apxGet(k):null,elm=typeof apElev==='function'?apElev(k):null,elT=elm!=null?Math.round(elm*3.281).toLocaleString()+' ft ('+elm.toLocaleString()+' m)':null;
+  if(elT){bs=bs.replace(wl,wl+'<div class="mut">Elevation <b style="color:var(--tx)">'+elT+'</b></div>');dt='<div class="mut" style="margin-top:6px">Elevation <b style="color:var(--tx)">'+elT+'</b></div>'+dt}
+  if(ax&&ax.img&&ax.by!==undefined)dt+='<div class="mut" style="margin-top:8px;font-size:11px">Photo: '+(ax.by||'Wikimedia Commons')+(ax.lic?' · '+ax.lic:'')+'</div>';
+  const phh=ax&&ax.img?'<img src="'+ax.img+'" loading="lazy" alt="'+Pp.iata+'" onerror="this.style.display=\'none\'" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block">':'';
+  el.innerHTML=card(frCard(phh,'<div class="row"><b style="font-size:18px">'+Pp.iata+'</b><span class="badge">'+Pp.cc+'</span></div>','<div class="mut">'+Pp.city+(hub?' · your hub':isBase?' · your base':'')+'</div>',bs,dt))}
 const CATK={Regional:[.78,.8],Narrow:[1,1],Mid:[1.15,1.12],Wide:[1.5,1.32]},catS=c=>{const k=CATK[c]||CATK.Narrow;return ' scale('+k[0]+' '+k[1]+')'};
 const PLANE='M10,0C10,-1.2 9,-1.6 7,-1.6L1,-1.6L-3,-8L-5.5,-8L-3.5,-1.6L-8,-1.6L-9.5,-4L-11,-4L-10,0L-11,4L-9.5,4L-8,1.6L-3.5,1.6L-5.5,8L-3,8L1,1.6L7,1.6C9,1.6 10,1.2 10,0Z';
 function sunPos(){const d=new Date(now()),doy=(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-Date.UTC(d.getUTCFullYear(),0,0))/864e5,
