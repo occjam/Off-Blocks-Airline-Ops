@@ -502,6 +502,8 @@ const rgp=a=>REGP[AP[a]?wreg(AP[a].cc):'GEN']||REGP.GEN;
 const POS={lcc:{n:'Low-cost',brand:-.18,pxs:14,cat:0,anc:9,crew:.92,ovh:.12,d:'Lowest fares and fast turns. Ancillary fees add about $9 per passenger and sales costs are lower, but business travellers and quality-sensitive passengers pass you by.'},hyb:{n:'Hybrid',brand:0,pxs:20,cat:0,anc:0,crew:1,ovh:.18,d:'The balanced default: a standard product with the usual costs.'},full:{n:'Full-service',brand:.35,pxs:28,cat:6,anc:0,crew:1.05,ovh:.2,d:'Better product, meals and cabins. Business and premium passengers choose you over equal-priced rivals, but each passenger costs more to serve and you must win on frequency, punctuality and routes the budget carriers avoid.'}};
 const PSN=()=>POS[S.pos||'hyb'];
 const CREW={Regional:1300,Narrow:1800,Mid:2100,Wide:3000},MXR={Regional:600,Narrow:900,Mid:1000,Wide:1700},TURNF={Regional:2600,Narrow:2600,Mid:3400,Wide:5600};
+/* economy speed: flights are real-time, so flight revenue and running costs are scaled up (default x12, about a 2-month payback on a new narrowbody). Lease, slot, upkeep and purchase prices are not scaled. */
+const ECO=()=>S.eco||12;
 function econ(r,f,t,dir,rand,at){const o=dir?r.d:r.o,dd=dir?r.o:r.d,g=geom(r,t);let wA=0;try{if(g)wA=wxLeg(r,t,g,dir,dayStart(dayIdx(at!=null?at:now())))||0}catch(e){}const blk=g?(g.b+wA)/60:0;
   const seats=seatsAt(t,o,g.d,f.seats||t[3]);const pd=pairDemand(r);if(!pd||!seats)return{pax:0,seats,rev:0,cost:0,g};
   const sf=seas(r,at),sl=cSell(r,f,t,g.d,seats,Math.round(pd.perFlight*sf*(0.92+0.16*rand)*(1-(S.repPen||0)))),px0=sl.pax;
@@ -509,7 +511,8 @@ function econ(r,f,t,dir,rand,at){const o=dir?r.d:r.o,dd=dir?r.o:r.d,g=geom(r,t);
   const pax=Math.round(px0*kk)+cp,rev=sl.rev*kk*(1+.6*(sf-1))+cprev+PSN().anc*pax;
   const rg=rgp(r.o),ps=PSN(),rgo=rgp(o);const cb={fuel:t[7]*blk*fuelMul(at!=null?at:now())*rgo.fuel,crew:CREW[t[2]]*blk*rg.crew*ps.crew,mxr:MXR[t[2]]*blk*rg.mx,land:land(dd)*t[5],nav:0.5*t[5]*g.d/100,pxs:ps.pxs*pax,cat:sl.cat*kk+ps.cat*pax,turn:TURNF[t[2]]*rg.crew,ovh:rev*ps.ovh};
   const c=cb.fuel+cb.crew+cb.mxr+cb.land+cb.nav+cb.pxs+cb.cat+cb.turn;
-  return{pax,seats,rev,cost:c+cb.ovh,g,pd,cls:sl,cb,rm:1+.6*(sf-1),cxp:cp,cxr:cprev}}
+  const K=ECO(),sc=o=>{const x={};for(const q in o)x[q]=o[q]*K;return x};
+  return{pax,seats,rev:rev*K,cost:(c+cb.ovh)*K,g,pd,cls:K===1?sl:Object.assign({},sl,{rvc:sc(sl.rvc||{})}),cb:sc(cb),rm:1+.6*(sf-1),cxp:cp,cxr:cprev*K}}
 /* ---------- fleet ---------- */
 const cint=t=>t[15]*270;
 function value(t,age,cond){const ref=t[13],refAge=t[17]?(Y0-t[17])+6:0;const v=ref*Math.exp(-0.055*(age-refAge));return Math.max(ref*0.12,v)*(0.9+0.2*cond/100)}
@@ -786,17 +789,17 @@ function runLeg(L){const {r,f,t,g,dep,arr,dir}=L;if(!S.fleet.includes(f)||!S.rou
   if(f.mx&&dep>=f.mx.until)f.mx=null;
   try{const ec=evCause(r,dep);if(ec){const pre=S.evPre&&S.evPre[ec.e.id+'|'+r.id];
     if(pre){S.evSeen=S.evSeen||{};const key='pc'+ec.e.id+r.id+dayIdx(dep);if(!S.evSeen[key]){S.evSeen[key]=1;log(r.o+'-'+r.d+' flights cancelled ahead: '+ec.e.nm)}rs.canc++;S.stat.canc++;return}
-    if(rng(hs(L.id+'ev'))()<ec.q){const c=(f.seats||150)*.7*65/1e6;LG('Passenger care and refunds').cash-=c;S.repPen=Math.min(.12,(S.repPen||0)+.004);log(f.reg+' '+nm+' cancelled: '+ec.e.nm+'. Passenger care '+money(c));rs.canc++;S.stat.canc++;return}}}catch(e){}
+    if(rng(hs(L.id+'ev'))()<ec.q){const c=(f.seats||150)*.7*65/1e6*ECO();LG('Passenger care and refunds').cash-=c;S.repPen=Math.min(.12,(S.repPen||0)+.004);log(f.reg+' '+nm+' cancelled: '+ec.e.nm+'. Passenger care '+money(c));rs.canc++;S.stat.canc++;return}}}catch(e){}
   const k=mxRisk(f,t);
   if(k.ground){log(f.reg+' '+nm+' cancelled: grounded, overdue maintenance');rs.canc++;S.stat.canc++;return}
   if(k.over&&rng(hs(L.id+'x'))()<.002+.014*Math.min(1,k.x)**2)return crash(f,r,t,nm,arr);
   const rand=rng(hs(L.id))();const e=econ(r,f,t,dir,rand,dep);try{bkApply(r,e,dep);ffApply(r,e,L.id,dep)}catch(x){}
-  {let cw={};try{cw=crCheck(r,f,t,g.b,L.id,e,L.dep)}catch(x){}if(cw.cancel){log(f.reg+' '+nm+' cancelled: crew shortage');rs.canc++;S.stat.canc++;return}if(cw.extra)e.cost+=cw.extra}
-  let wd=0;try{const wo=wxOps(dir?r.o:r.d,t,arr,L.id,e.pax);if(wo){const fp=fuelMul(arr),dst=dir?r.o:r.d;let ex=t[7]*(wo.hold/60)*fp;wd=wo.hold;if(wo.div){const bm=(wo.div.km*1.1/t[8])*60+25;ex+=t[7]*(bm/60)*fp+t[5]*.9*10+e.pax*65;wd+=Math.round(60+bm);e.rev*=.9;rs.div=(rs.div||0)+1;S.stat.div=(S.stat.div||0)+1;log(f.reg+' '+nm+' diverted to '+wo.div.code+' ('+(AP[wo.div.code]?AP[wo.div.code].city:'')+'): weather at '+dst+'. Extra cost '+usd(ex));try{newsAdd('wx',f.reg+' diverts to '+wo.div.code+' as weather closes in on '+dst,['One of your flights, '+f.reg+' ('+nm+'), could not land at '+(AP[dst]?AP[dst].city:dst)+' because of '+(WX.ap[dst]&&WX.ap[dst].tx?WX.ap[dst].tx.toLowerCase():'severe weather')+' and diverted to '+wo.div.code+'.','Passengers were looked after and rebooked. The extra fuel, landing fees and passenger care cost about '+usd(ex)+'.'],'The aircraft is out of position, so its next departure is likely to be late.')}catch(x){}}else if(wo.hold>=20)log(f.reg+' '+nm+' held '+wo.hold+' min before landing at '+dst+' (weather)');e.cost+=ex}}catch(x){}
-  try{const dh0=dir?r.d:r.o;if(S.hubs&&S.hubs.includes(dh0)&&gnStrikeAt(dh0,dep)&&rng(hs('sk'+r.id+dep))()<.4){const c=(f.seats||150)*.7*65/1e6;LG('Passenger care and refunds').cash-=c;S.repPen=Math.min(.12,(S.repPen||0)+.004);log(f.reg+' '+nm+' cancelled: ground staff strike at '+dh0+'. Passenger care '+money(c));rs.canc++;S.stat.canc++;return}}catch(x){}
-  let gd=0;try{const dh=dir?r.d:r.o,hh=S.hubs&&(S.hubs.includes(dh)?dh:S.hubs.includes(dir?r.o:r.d)?(dir?r.o:r.d):'');if(hh){const gx=gnDelay(dh===hh?hh:hh,dep,L.id);if(dh===hh){gd=gx.d;gnNote(hh,gd);if(gd>0)e.cost+=gd*55;if(gd>=30)log(f.reg+' '+nm+' delayed '+gd+' min by ground handling at '+hh+' ('+GNU[gx.k].n.toLowerCase()+')')}if(gnPeak(hh)<=1)e.cost-=.3*e.cb.turn}}catch(x){}
+  {let cw={};try{cw=crCheck(r,f,t,g.b,L.id,e,L.dep)}catch(x){}if(cw.cancel){log(f.reg+' '+nm+' cancelled: crew shortage');rs.canc++;S.stat.canc++;return}if(cw.extra)e.cost+=cw.extra*ECO()}
+  let wd=0;try{const wo=wxOps(dir?r.o:r.d,t,arr,L.id,e.pax);if(wo){const fp=fuelMul(arr),dst=dir?r.o:r.d;let ex=t[7]*(wo.hold/60)*fp;wd=wo.hold;if(wo.div){const bm=(wo.div.km*1.1/t[8])*60+25;ex+=t[7]*(bm/60)*fp+t[5]*.9*10+e.pax*65;wd+=Math.round(60+bm);e.rev*=.9;rs.div=(rs.div||0)+1;S.stat.div=(S.stat.div||0)+1;log(f.reg+' '+nm+' diverted to '+wo.div.code+' ('+(AP[wo.div.code]?AP[wo.div.code].city:'')+'): weather at '+dst+'. Extra cost '+usd(ex));try{newsAdd('wx',f.reg+' diverts to '+wo.div.code+' as weather closes in on '+dst,['One of your flights, '+f.reg+' ('+nm+'), could not land at '+(AP[dst]?AP[dst].city:dst)+' because of '+(WX.ap[dst]&&WX.ap[dst].tx?WX.ap[dst].tx.toLowerCase():'severe weather')+' and diverted to '+wo.div.code+'.','Passengers were looked after and rebooked. The extra fuel, landing fees and passenger care cost about '+usd(ex)+'.'],'The aircraft is out of position, so its next departure is likely to be late.')}catch(x){}}else if(wo.hold>=20)log(f.reg+' '+nm+' held '+wo.hold+' min before landing at '+dst+' (weather)');e.cost+=ex*ECO()}}catch(x){}
+  try{const dh0=dir?r.d:r.o;if(S.hubs&&S.hubs.includes(dh0)&&gnStrikeAt(dh0,dep)&&rng(hs('sk'+r.id+dep))()<.4){const c=(f.seats||150)*.7*65/1e6*ECO();LG('Passenger care and refunds').cash-=c;S.repPen=Math.min(.12,(S.repPen||0)+.004);log(f.reg+' '+nm+' cancelled: ground staff strike at '+dh0+'. Passenger care '+money(c));rs.canc++;S.stat.canc++;return}}catch(x){}
+  let gd=0;try{const dh=dir?r.d:r.o,hh=S.hubs&&(S.hubs.includes(dh)?dh:S.hubs.includes(dir?r.o:r.d)?(dir?r.o:r.d):'');if(hh){const gx=gnDelay(dh===hh?hh:hh,dep,L.id);if(dh===hh){gd=gx.d;gnNote(hh,gd);if(gd>0)e.cost+=gd*55*ECO();if(gd>=30)log(f.reg+' '+nm+' delayed '+gd+' min by ground handling at '+hh+' ('+GNU[gx.k].n.toLowerCase()+')')}if(gnPeak(hh)<=1)e.cost-=.3*e.cb.turn}}catch(x){}
   let od=0;try{const A=dir?r.d:r.o,B=dir?r.o:r.d,hb=S.hubs||[];if(!hb.includes(A))od=osLeg(A,dep,e,L.id,e.pax,1);if(!hb.includes(B))osLeg(B,dep,e,L.id,e.pax,0);if(od>=15)log(f.reg+' '+nm+' delayed '+od+' min by the handler at '+A+'. SLA credit '+usd(osSt(A).lc||0))}catch(x){}
-  let gk=0;try{if(dep-(f.lastArr||0)>4*HRMS)f.carry=0;gk=Math.max(0,Math.round((f.carry||0)-.33*(g.turn||40)));if(gk>0){e.cost+=gk*55;if(gk>=20)log(f.reg+' '+nm+' departs '+gk+' min late: knock-on from the previous flight')}}catch(x){}
+  let gk=0;try{if(dep-(f.lastArr||0)>4*HRMS)f.carry=0;gk=Math.max(0,Math.round((f.carry||0)-.33*(g.turn||40)));if(gk>0){e.cost+=gk*55*ECO();if(gk>=20)log(f.reg+' '+nm+' departs '+gk+' min late: knock-on from the previous flight')}}catch(x){}
   const gt=Math.min(120,gd+gk+od);f.carry=Math.max(0,gt-5)+wd;f.lastArr=arr;
   log(f.reg+' '+nm+' landed '+hhmm(arr)+': '+e.pax+'/'+e.seats+' pax, revenue '+usd(e.rev)+', cost '+usd(e.cost)+', result '+usd(e.rev-e.cost));
   LG('*').cash+=(e.rev-e.cost)/1e6;ledFl(e);rs.rev+=e.rev;rs.cost+=e.cost;rs.fl++;rs.pax+=e.pax;rs.seats+=e.seats;
@@ -2869,8 +2872,8 @@ function osTier(a){const o=S.gnd&&S.gnd.o;return(o&&OST[o[a]]&&(o[a]!=='p'||lvLe
 function osSt(a){const g=gnS();g.os=g.os||{};return g.os[a]||(g.os[a]={n:0,l:0,d:0,c:0})}
 /* called per leg for one airport that is not a hub; returns delay minutes (departures only) */
 function osLeg(a,dep,e,id,pax,departing){const T=OST[osTier(a)],S0=OST.s,st=osSt(a);let d=0;
-  const x=e.cb.turn*.5*(T.c-1)+pax*(T.bag-S0.bag)*.5;e.cost+=x;st.c+=x;
-  if(departing){const R=rng(hs(id+'os'+a));if(R()<T.p)d=Math.round(T.av*(.5+R()*1.5));st.n++;st.d+=d;if(d>=15)st.l++;if(d>0)e.cost+=d*55;st.lc=0;if(d>=15){const fee=e.cb.turn*.5*T.c,cr=fee*Math.min(1,(d>=60?.75:d>=30?.5:.25)*T.sla);e.cost-=cr;st.cr=(st.cr||0)+cr;st.lc=cr}}
+  const x=e.cb.turn*.5*(T.c-1)+pax*(T.bag-S0.bag)*.5*ECO();e.cost+=x;st.c+=x;
+  if(departing){const R=rng(hs(id+'os'+a));if(R()<T.p)d=Math.round(T.av*(.5+R()*1.5));st.n++;st.d+=d;if(d>=15)st.l++;if(d>0)e.cost+=d*55*ECO();st.lc=0;if(d>=15){const fee=e.cb.turn*.5*T.c,cr=fee*Math.min(1,(d>=60?.75:d>=30?.5:.25)*T.sla);e.cost-=cr;st.cr=(st.cr||0)+cr;st.lc=cr}}
   return d}
 function osCard(){const hubs=S.hubs||[],set={};S.routes.forEach(r=>{[r.o,r.d].forEach(a=>{if(!hubs.includes(a))set[a]=(set[a]||0)+1})});const L=Object.keys(set);if(!L.length)return'';
   L.sort((a,b)=>(osSt(b).n-osSt(a).n)||set[b]-set[a]);const g=gnS();
