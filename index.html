@@ -1100,11 +1100,30 @@ function gcPt(a,b,f){const la1=a.lat*RAD,lo1=a.lon*RAD,la2=b.lat*RAD,lo2=b.lon*R
   return[Math.atan2(z,Math.hypot(x,y))/RAD,Math.atan2(y,x)/RAD]}
 let EVA={t:-1,L:[]};
 function evAct(){const n=Math.floor(now()/1000);if(EVA.t===n)return EVA.L;EVA.t=n;try{EVA.L=typeof evAll==='function'?evAll(now()).filter(e=>e.k!=='fue'&&e.k!=='stk'&&e.k!=='clo'&&now()>=e.a&&now()<e.b&&e.r1>0):[]}catch(x){EVA.L=[]}return EVA.L}
-/* flown path: the great circle, bent around any active storm so the aircraft steers clear of its core (blended out near both airports) */
-function gcPtD(a,b,f){const p=gcPt(a,b,f),E=evAct();if(!E.length)return p;const w=Math.min(1,Math.min(f,1-f)/.12);if(w<=0)return p;let la=p[0],lo=p[1];
-  for(const e of E){const R=Math.min(e.r2||e.r1*2,e.r1*1.5+40),cl=Math.cos(e.lat*RAD),dx=((lo-e.lon+540)%360-180)*111.2*cl,dy=(la-e.lat)*111.2,dist=Math.hypot(dx,dy);if(dist>=R)continue;
-    const k=dist<1e-3?[0,1]:[dx/dist,dy/dist],nx=k[0]*R,ny=k[1]*R,tx=dx+(nx-dx)*w,ty=dy+(ny-dy)*w;lo=e.lon+tx/(111.2*cl);la=e.lat+ty/111.2}
-  return[la,lo]}
+/* ---- smart routes: leave and join along the real runway heading, a small per-pair wind/airway offset, bent around conflict zones and active storms ---- */
+const NOFLY=[[49,32,520],[53,28,260],[32.5,53.5,650],[33.5,43.5,480],[35,38,260],[33.5,66,520],[15.5,47.5,320],[5,46,340],[40,127,160],[15,31,300],[28,17,380]];
+function llOff(p,e,n){const cl=Math.cos(p[0]*RAD)||1e-6;return[p[0]+n/111.2,p[1]+e/(111.2*cl)]}
+function rwDir(ap,tx,ty,mode){let R;try{R=typeof RWY!=='undefined'&&RWY[ap.iata]}catch(e){}if(!R||!R.length)return null;const r=R[0],hx=r[2]-r[0],hy=r[3]-r[1],l=Math.hypot(hx,hy)||1,u=[hx/l,hy/l],v=[-u[0],-u[1]];
+  const sc=h=>mode===0?h[0]*tx+h[1]*ty:-(h[0]*tx+h[1]*ty);return sc(u)>=sc(v)?u:v}
+function pushOut(la,lo,w,L){for(const z of L){const R=z[2],cl=Math.cos(z[0]*RAD),dx=((lo-z[1]+540)%360-180)*111.2*cl,dy=(la-z[0])*111.2,dist=Math.hypot(dx,dy);if(dist>=R)continue;const k=dist<1e-3?[0,1]:[dx/dist,dy/dist],tx=dx+(k[0]*R-dx)*w,ty=dy+(k[1]*R-dy)*w;lo=z[1]+tx/(111.2*cl);la=z[0]+ty/111.2}return[la,lo]}
+const RTC=new Map();
+function routeBuild(o,d){const km=gcKm(o,d);if(km<120)return null;
+  const ST=evAct().map(e=>[e.lat,e.lon,Math.min(e.r2||e.r1*2,e.r1*1.5+40)]),zones=NOFLY.concat(ST).filter(z=>gcKm(o,{lat:z[0],lon:z[1]})>z[2]+30&&gcKm(d,{lat:z[0],lon:z[1]})>z[2]+30),N=Math.max(10,Math.min(60,Math.round(km/70))),sg=o.iata<d.iata?1:-1;
+  let h=0;const hk=o.iata<d.iata?o.iata+d.iata:d.iata+o.iata;for(let i=0;i<hk.length;i++)h=(h*31+hk.charCodeAt(i))>>>0;const bulge=km<500?0:Math.min(70,km*.018)*(((h%1000)/1000)*2-1)*sg;
+  const fd=Math.min(.3,60/km),fa=Math.min(.3,60/km),M=[];
+  for(let i=0;i<=N;i++){const f=i/N;if(f<fd||f>1-fa)continue;let p=gcPt(o,d,f);const q=gcPt(o,d,Math.min(1,f+.01)),cl=Math.cos(p[0]*RAD),tx=((q[1]-p[1]+540)%360-180)*cl,ty=q[0]-p[0],tl=Math.hypot(tx,ty)||1,off=bulge*Math.sin(Math.PI*f);
+    p=llOff(p,-ty/tl*off,tx/tl*off);const w=Math.min(1,Math.min(f,1-f)/.12);p=pushOut(p[0],p[1],w,zones);M.push(p)}
+  const A=[o.lat,o.lon],B=[d.lat,d.lon],p1=gcPt(o,d,.03),p2=gcPt(o,d,.97),cA=Math.cos(o.lat*RAD),cB=Math.cos(d.lat*RAD);
+  const dd=rwDir(o,((p1[1]-o.lon+540)%360-180)*cA,p1[0]-o.lat,0),da=rwDir(d,((p2[1]-d.lon+540)%360-180)*cB,p2[0]-d.lat,1);
+  let P=[A];if(dd){P.push(llOff(A,dd[0]*14,dd[1]*14),llOff(A,dd[0]*34,dd[1]*34))}
+  P=P.concat(M);if(da){P.push(llOff(B,-da[0]*34,-da[1]*34),llOff(B,-da[0]*14,-da[1]*14))}P.push(B);
+  for(let i=1;i<P.length;i++){let dl=P[i][1]-P[i-1][1];while(dl>180){P[i]=[P[i][0],P[i][1]-360];dl-=360}while(dl<-180){P[i]=[P[i][0],P[i][1]+360];dl+=360}}
+  for(let it=0;it<2;it++){const Q=[P[0]];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1];Q.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75])}Q.push(P[P.length-1]);P=Q}
+  const cum=[0];for(let i=1;i<P.length;i++){const cl=Math.cos((P[i][0]+P[i-1][0])/2*RAD);cum.push(cum[i-1]+Math.hypot((P[i][1]-P[i-1][1])*cl,P[i][0]-P[i-1][0])*111.2)}
+  return{P,cum,tot:cum[cum.length-1]||1}}
+function routeGet(o,d){const key=o.iata+'>'+d.iata+'|'+evAct().map(e=>e.id).join(',');let r=RTC.get(key);if(r===undefined){r=routeBuild(o,d);RTC.set(key,r);if(RTC.size>600)RTC.delete(RTC.keys().next().value)}return r}
+function gcPtD(o,d,f){const R=routeGet(o,d);if(!R)return gcPt(o,d,f);f=Math.max(0,Math.min(1,f));const s=f*R.tot,C=R.cum;let lo=0,hi=C.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(C[m]<=s)lo=m;else hi=m}const sg=C[hi]-C[lo]||1,u=(s-C[lo])/sg,a=R.P[lo],b=R.P[hi];let lon=a[1]+(b[1]-a[1])*u;lon=((lon+540)%360+360)%360-180;return[a[0]+(b[0]-a[0])*u,lon]}
+function routeLine(o,d,n){let s='',pl=null;n=n||80;for(let i=0;i<=n;i++){const p=gcPtD(o,d,i/n),q=P(p[1],p[0]);const brk=!q[2]||(MS.proj==='flat'&&pl!==null&&Math.abs(p[1]-pl)>180);s+=(brk||i===0?'M':'L')+q[0].toFixed(1)+' '+q[1].toFixed(1);pl=p[1]}return s}
 function gcPath(a,b){let s='',pl=null;for(let i=0;i<=48;i++){const p=gcPt(a,b,i/48),X=mx(p[1]),Y=my(p[0]);s+=(pl===null||Math.abs(p[1]-pl)>180?'M':'L')+X.toFixed(1)+' '+Y.toFixed(1);pl=p[1]}return s}
 function airFlight(f){if(!NETOK||(f.mx&&now()<f.mx.until))return null;const t=TY[f.code],n=now();
   for(const r of S.routes){if(r.reg!==f.reg)continue;const g=geom(r,t);if(!g)continue;
@@ -1133,7 +1152,7 @@ function fpos(o,d,p,h){
 function gcKm(a,b){const la1=a.lat*RAD,la2=b.lat*RAD,x=Math.sin((la2-la1)/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin((b.lon-a.lon)*RAD/2)**2;return 12742*Math.asin(Math.min(1,Math.sqrt(x)))}
 function holdTxt(h,p,dst){if(!h)return'';const hf=Math.min(.3,Math.max(.02,h.hold*60000/Math.max(6e5,h.T))),lg=h.div?.12:.05,hs0=1-hf-lg;if(p>=hs0&&p<1-lg)return'<div class="mut" style="margin-top:4px;color:#fbbf24">Holding for weather at '+dst+' · about '+h.hold+' min</div>';if(h.div&&p>=1-lg)return'<div class="mut" style="margin-top:4px;color:#f87171">Diverting to '+h.div.code+' because of weather at '+dst+'</div>';return h.hold>0||h.div?'<div class="mut" style="margin-top:4px;color:#fbbf24">Weather at '+dst+': expect '+(h.div?'a diversion to '+h.div.code:'a hold of about '+h.hold+' min')+'</div>':''}
 function mtrk(o,d,p,col,h){let dd='',pen=0,pl2=null;for(let i=0;i<=40;i++){const gp=fpos(o,d,p*i/40,h),qq=P(gp[1],gp[0]);const brk=!qq[2]||(MS.proj==='flat'&&pl2!==null&&Math.abs(gp[1]-pl2)>180);if(brk)pen=0;else{dd+=(pen?'L':'M')+qq[0].toFixed(1)+' '+qq[1].toFixed(1);pen=1}pl2=gp[1]}
-  let s='<path d="'+gcLine(o,d,64)+'" fill="none" stroke="'+col+'" stroke-opacity=".75" stroke-width="1.8" stroke-dasharray="5 5"/><path d="'+dd+'" fill="none" stroke="#06101a" stroke-opacity=".55" stroke-width="6" stroke-linecap="round"/><path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="3.4" stroke-linecap="round"/>';
+  let s='<path d="'+routeLine(o,d,80)+'" fill="none" stroke="'+col+'" stroke-opacity=".75" stroke-width="1.8" stroke-dasharray="5 5"/><path d="'+dd+'" fill="none" stroke="#06101a" stroke-opacity=".55" stroke-width="6" stroke-linecap="round"/><path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="3.4" stroke-linecap="round"/>';
   [[o,1],[d,0]].forEach(([a,f])=>{const q=P(a.lon,a.lat);if(!q[2])return;s+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+')"><circle r="5" fill="'+(f?col:'#0f172a')+'" stroke="#fff" stroke-width="1.6"/><text y="-9" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" stroke="#000" stroke-width="2.6" paint-order="stroke" font-family="ui-monospace,monospace">'+a.iata+'</text></g>'});return s}
 let RFL=[];let MSEL=null,MPREV=null,MFL=[],MPD=0,MP0=null,MRAF=0,MQ=Math.min(window.devicePixelRatio||1,2),MQT=0;const MQ0=()=>Math.min(window.devicePixelRatio||1,2);
 const DEG=180/Math.PI,MAPH='calc(100dvh - 250px)';
@@ -1341,7 +1360,7 @@ function mapUpdate0(){const sv=$('#wm'),cv=$('#mcv');if(!sv||!cv)return;mapSize(
     L.push('<div class="row" style="padding:4px 0;border-bottom:1px solid var(--line)"><span><span class="code">'+f.reg+'</span> '+a.t[1]+'</span><span class="mut">'+o.iata+' → '+d.iata+' · '+fmtD(a.arr-now())+'</span></div>');
     if(!q[2])return;let ang=Math.atan2(q2[1]-q[1],q2[0]-q[0])*DEG;if(!isFinite(ang)||a.p>.99)ang=a.ang||0;if(Math.abs(q2[0]-q[0])>200)ang=a.ang||0;a.ang=ang;MFL.push({f,r:a.r,t:a.t,dir:a.dir,arr:a.arr,p:a.p,h:hh,X:q[0],Y:q[1]});
     const sel=MSEL&&MSEL.fl===f.reg;let dd='',pen=0,pl2=null;for(let i=0;i<=24;i++){const gp=fpos(o,d,a.p*i/24,hh),qq=P(gp[1],gp[0]);const brk=!qq[2]||(MS.proj==='flat'&&pl2!==null&&Math.abs(gp[1]-pl2)>180);if(brk)pen=0;else{dd+=(pen?'L':'M')+qq[0].toFixed(1)+' '+qq[1].toFixed(1);pen=1}pl2=gp[1]}
-    if(sel)tr+=mtrk(o,d,a.p,acc(),hh);else{tr+='<path d="'+gcLine(o,d,64)+'" fill="none" stroke="'+acc()+'" stroke-opacity=".6" stroke-width="1.4" stroke-dasharray="4 4"/>';
+    if(sel)tr+=mtrk(o,d,a.p,acc(),hh);else{tr+='<path d="'+routeLine(o,d,50)+'" fill="none" stroke="'+acc()+'" stroke-opacity=".6" stroke-width="1.4" stroke-dasharray="4 4"/>';
     tr+='<path d="'+dd+'" fill="none" stroke="'+acc()+'" stroke-width="2.4" stroke-opacity=".95"/>'}
     pl+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+(sel?2.1:1.7)+')"><g transform="rotate('+ang.toFixed(1)+')'+catS(a.t[2])+'">'+(sel?'<circle r="14" fill="none" stroke="#fff" stroke-width="1.2"/>':'')+'<path d="'+PLANE+'" fill="'+acc()+'" stroke="#06241f" stroke-width="1.2"/></g></g>'});
   let dl='',DLR='';S.orders.forEach(o=>{dlvOrd(o);const b=AP[S.base];if(!b)return;const t=TY[o.code],n0=now(),A={lat:o.from[1],lon:o.from[2]},lbl=(o.kind==='lease'?'Lease':o.kind==='own'?'Used':'New')+' '+t[1]+(o.n>1?' x'+o.n:'');
