@@ -1325,7 +1325,7 @@ function mapUpdate0(){const sv=$('#wm'),cv=$('#mcv');if(!sv||!cv)return;mapSize(
       const g2=gcPt(oo,dd,Math.min(1,p+.01)),q2=P(g2[1],g2[0]);let ang=Math.atan2(q2[1]-q[1],q2[0]-q[0])*DEG;if(!isFinite(ang)||Math.abs(q2[0]-q[0])>200)ang=0;cnt++;
       const sel=MSEL&&MSEL.rv===a.key;RFL.push({a,X:q[0],Y:q[1],p});
       rp+='<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+(sel?1.8:sc)+')"><g transform="rotate('+ang.toFixed(1)+')'+catS(TY[a.code]?TY[a.code][2]:'Narrow')+'">'+(sel?'<circle r="13" fill="none" stroke="#fff" stroke-width="1.2"/>':'')+'<path d="'+PLANE+'" fill="'+aiColC(a.c)+'" fill-opacity=".9" stroke="#06241f" stroke-width="1"/></g></g>'}}
-  sv.innerHTML=h+(MS.wnd?wxLayer():'')+(typeof evLayer==='function'?evLayer():'')+rvl+tr+rp+rdl+pl+dl;
+  sv.innerHTML=h+(MS.wnd?wxLayer():'')+(typeof evLayer==='function'?evLayer():'')+(typeof incMapLayer==='function'?incMapLayer(P,ke,W,H):'')+rvl+tr+rp+rdl+pl+dl;
   if(MSEL&&(MSEL.fl||MSEL.dl||MSEL.rv))mapInfo();
   const ml=$('#mlist');if(ml)ml.innerHTML='<h3>In the air ('+L.length+')</h3>'+(L.join('')||'<div class="mut">No aircraft airborne right now.</div>')+(DLR?'<h3>Deliveries ('+S.orders.length+')</h3>'+DLR:'')+(RDR?'<h3>Rival deliveries</h3>'+RDR:'')+wxStatus()}
 
@@ -2539,6 +2539,24 @@ function incAirfieldCard(hub){const B=incS(),n=now(),a=gnBoard(hub,n).L.filter(x
   return'<div class="card"><div class="row"><b>Airfield</b><span class="mut">'+a+' aircraft on stand</span></div><div style="margin-top:6px">'+incAirfield(hub)+'</div>'+(h?'<div class="mut" style="font-size:11px;margin-top:4px">Last incident: '+h.k+', '+(h.m==='divert'?'diverted':'held')+', cost '+money(h.c)+'</div>':'')+'</div>'}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-inc]');if(!b)return;const [hub,m]=b.dataset.inc.split('|'),i=incAct(hub,now());if(!i)return;
   if(m==='fast'){const f=incFastFee(i);if(S.cash<f){toast('Needs '+money(f),1);return}if(i.fast)return;i.fast=1;const n=now();i.until=n+Math.round((i.until-n)*.6)}else i.mode=m;save();render()});
+/* airfield drawn on the map when zoomed in */
+let INC_OC={};
+function incOcc(hub,n){const k=hub+Math.floor(n/20000),c=INC_OC[hub];if(c&&c.k===k)return c;const B=gnBoard(hub,n),act=B.L.filter(x=>x.st==='Unloading'||x.st==='Cleaning'||x.st==='Fuel and catering'||x.st==='Boarding'),dp=B.L.find(x=>x.st==='Departed'&&n-(x.dep+x.tot*MIN)<60000&&n>=x.dep+x.tot*MIN),
+  r={k,own:act.map(x=>x.own?1:0),dp:dp?(n-(dp.dep+dp.tot*MIN))/60000:-1,q:B.L.filter(x=>!x.cx&&x.st!=='Departed').length};INC_OC[hub]=r;return r}
+function incMapLayer(P,ke,W,H){if(ke<10&&!(S.hubs||[]).some(h=>incAct(h,now())))return'';const n=now();let o='<defs><pattern id="inch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="#e5484d"/></pattern></defs>';
+  (S.hubs||[]).forEach(hub=>{const A=AP[hub];if(!A)return;const q=P(A.lon,A.lat);if(!q[2]||q[0]<-150||q[0]>W+150||q[1]<-150||q[1]>H+150)return;const i=incAct(hub,n),x=q[0].toFixed(1),y=q[1].toFixed(1);
+    if(ke<24){if(i)o+='<g style="pointer-events:none"><circle cx="'+x+'" cy="'+y+'" r="6" fill="#e5484d"><animate attributeName="r" values="6;16;6" dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;.15;1" dur="1.4s" repeatCount="indefinite"/></circle><circle cx="'+x+'" cy="'+y+'" r="4" fill="#e5484d" stroke="#fff" stroke-width="1.5"/><text x="'+x+'" y="'+(q[1]-14).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#ff8a8e" stroke="#000" stroke-width="2.5" paint-order="stroke" font-family="ui-monospace,monospace">RWY CLOSED</text></g>';return}
+    const cf=gnCfg(hub),NS=Math.max(4,Math.min(12,cf.st|0)),oc=incOcc(hub,n),L=Math.min(250,70+ke*2),rw=incRw(hub),hd=parseInt(rw,10)*10,rot=hd-90,sp=(L-16)/NS,ps=.4+Math.min(ke,60)/110;
+    const pl=(px,py,c,r)=>'<g transform="translate('+px.toFixed(1)+' '+py.toFixed(1)+') rotate('+r+') scale('+ps.toFixed(2)+')" fill="'+c+'" stroke="#06101a" stroke-width=".8"><path d="M0-7L1.6-2 8 1.5V3L1.6 1.5 1.2 5 3.4 6.4V7.5L0 6.7-3.4 7.5V6.4L-1.2 5-1.6 1.5-8 3V1.5L-1.6-2Z"/></g>';
+    let g='<g transform="translate('+x+' '+y+') rotate('+rot+')"><rect x="'+(-L/2)+'" y="-4" width="'+L+'" height="8" rx="2" fill="'+(i?'url(#inch2)':'#27323f')+'" stroke="'+(i?'#e5484d':'#9fb0c3')+'" stroke-width="1"/><line x1="'+(-L/2+6)+'" y1="0" x2="'+(L/2-6)+'" y2="0" stroke="#cfd8e3" stroke-width=".8" stroke-dasharray="5 4"/>'
+     +'<line x1="'+(-L/2+4)+'" y1="14" x2="'+(L/2-4)+'" y2="14" stroke="#7d8da1" stroke-width="2"/>'+[-.4,0,.4].map(f=>'<line x1="'+(f*L)+'" y1="4" x2="'+(f*L)+'" y2="14" stroke="#7d8da1" stroke-width="2"/>').join('')
+     +'<rect x="'+(-L/2+8)+'" y="38" width="'+(L-16)+'" height="7" rx="2" fill="#3a4757" stroke="#9fb0c3" stroke-width=".6"/>';
+    for(let k=0;k<NS;k++){const sx=-L/2+8+sp*(k+.5),on=k<oc.own.length;g+='<line x1="'+sx.toFixed(1)+'" y1="14" x2="'+sx.toFixed(1)+'" y2="36" stroke="#516174" stroke-width=".8"/>';if(on&&ke>=18)g+=pl(sx,26,oc.own[k]?'#2dd4bf':'#cbd5e1',180)}
+    if(i){g+='<circle cx="0" cy="0" r="7" fill="#e5484d"><animate attributeName="r" values="7;20;7" dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;.1;1" dur="1.4s" repeatCount="indefinite"/></circle><circle cx="0" cy="0" r="5" fill="#e5484d" stroke="#fff" stroke-width="1.5"/>';
+      if(i.mode!=='divert')for(let k=0;k<Math.min(4,oc.q);k++)g+='<g><animateTransform attributeName="transform" type="rotate" from="'+(k*90)+' 0 -40" to="'+(k*90+360)+' 0 -40" dur="10s" repeatCount="indefinite"/>'+pl(26,-40,'#f2b84b',90)+'</g>'}
+    else if(oc.dp>=0)g+=pl(-L/2+8+oc.dp*(L-16),0,'#2dd4bf',90);
+    g+='</g>';o+='<g style="pointer-events:none">'+g+'<text x="'+x+'" y="'+(q[1]-Math.max(16,L*.12)).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="700" fill="'+(i?'#ff8a8e':'#e6edf5')+'" stroke="#06101a" stroke-width="2.5" paint-order="stroke" font-family="ui-monospace,monospace">'+hub+' RWY '+rw+(i?' CLOSED '+Math.ceil((i.until-n)/MIN)+'m':'')+'</text></g>'});
+  return o}
 /* ---------- backup: export and import your airline ---------- */
 function bkCode(){const p=PR.find(x=>x.id===CUR);return JSON.stringify({gom:1,name:S.name,saved:Date.now(),game:p?p.id:'',S})}
 function bkCard(){let sz=0;try{sz=Math.round(bkCode().length/1024)}catch(e){}
