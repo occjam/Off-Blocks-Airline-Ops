@@ -1280,7 +1280,9 @@ function mapFS(o,d,p,t,etaMs,part){const R=Math.PI/180,a1=o.lat*R,a2=d.lat*R,dl=
     B='<div class="mut" style="margin-top:6px">Distance <b>'+Math.round(x).toLocaleString()+'</b> of '+Math.round(D).toLocaleString()+' nm · <b>'+Math.round(D-x).toLocaleString()+' nm</b> to go</div><div class="mut">Wind <b>'+Math.round(wd.sp*af)+' kt</b> · '+(Math.abs(tw)<8?'mostly crosswind':Math.abs(tw)+' kt '+(tw>0?'tailwind':'headwind'))+(WX.live?' (live)':'')+'</div>';
   return part==='a'?A:part==='b'?B:B+A}
 /* flight numbers: 2-letter airline code from the name + a stable number per route (consecutive numbers for the two directions) */
-function alCode(name){const w=String(name||'OB').replace(/[^A-Za-z ]/g,'').trim().split(/\s+/).filter(Boolean);const c=(w.length>1?w[0][0]+w[1][0]:(w[0]||'OB').slice(0,2)).toUpperCase();return c.length<2?'OB':c}
+function alCode(name){name=String(name||'Off Blocks');const M=(S.acm=S.acm||{});if(M[name])return M[name];const used=new Set(Object.values(M)),w=name.replace(/[^A-Za-z ]/g,'').trim().split(/\s+/).filter(Boolean),L=name.replace(/[^A-Za-z]/g,'').toUpperCase()||'OB',A='ABCDEFGHIJKLMNOPQRSTUVWXYZ',c=[];
+  if(w.length>1)c.push((w[0][0]+w[1][0]).toUpperCase());c.push(L.slice(0,2));for(let i=1;i<L.length;i++)c.push(L[0]+L[i]);if(w.length>1)for(let i=1;i<w.length;i++)c.push((w[0][0]+w[i][0]).toUpperCase());for(const x of A)c.push(L[0]+x);for(const x of A)for(const y of A)c.push(x+y);
+  const k=c.find(x=>x.length===2&&!used.has(x))||'ZZ';M[name]=k;return k}
 function fltNo(name,key,off){let h=0;for(const ch of String(key))h=(h*31+ch.charCodeAt(0))>>>0;return alCode(name)+' '+(100+(h%440)*2+(off||0))}
 /* FlightRadar-style card: photo + headline, then a Flight tab (what you can see from outside) and a Details tab */
 let MTAB='f';
