@@ -2639,16 +2639,30 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-inc]');if(
 
 /* real gates, taxiways, aprons and terminals from OpenStreetMap (fetched once per airport in the browser, then cached) */
 const OSMC={};
-function incOsm(hub){let o=OSMC[hub];if(o)return o.ok?o:(o.err&&Date.now()-o.err>90000?(o.err=0,incOsmFetch(hub),null):null);o=OSMC[hub]={ok:0};
-  try{const j=localStorage.getItem('ob-osm4-'+hub);if(j){incOsmBuild(hub,JSON.parse(j));return o.ok?o:null}}catch(e){}incOsmFetch(hub);return null}
-async function incOsmFetch(hub){const A=AP[hub],d=.024,cl=Math.cos(A.lat*Math.PI/180),dl=d/cl,b=[A.lat-d,A.lon-dl,A.lat+d,A.lon+dl].map(v=>v.toFixed(5)).join(','),H='[out:json][timeout:40];',
+/* airport layout cache: IndexedDB (big, durable) with a persistent-storage request; falls back to localStorage if IndexedDB is unavailable */
+const OSMDB={ready:0,mem:{},db:null};
+function osmPut(h,D){const e={D,t:Date.now()};OSMDB.mem[h]=e;try{if(OSMDB.db){OSMDB.db.transaction('osm','readwrite').objectStore('osm').put(e,h)}else{const x=JSON.stringify(D);if(x.length<700000)localStorage.setItem('ob-osm4-'+h,x)}}catch(err){}}
+async function osmInit(){try{OSMDB.db=await new Promise((res,rej)=>{const r=indexedDB.open('ob-cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('osm');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+    await new Promise(res=>{const rq=OSMDB.db.transaction('osm','readonly').objectStore('osm').openCursor();rq.onsuccess=()=>{const c=rq.result;if(c){OSMDB.mem[c.key]=c.value;c.continue()}else res()};rq.onerror=()=>res()})}catch(e){OSMDB.db=null}
+  if(OSMDB.db){try{Object.keys(localStorage).filter(k=>k.startsWith('ob-osm4-')).forEach(k=>{const h=k.slice(8);if(!OSMDB.mem[h]){try{osmPut(h,JSON.parse(localStorage.getItem(k)))}catch(e){}}localStorage.removeItem(k)})}catch(e){}}
+  OSMDB.ready=1;try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}try{tileRedraw()}catch(e){}osmPreload()}
+/* quietly load the hubs and route airports in the background, one at a time, so they are ready before you open the map */
+function osmPreload(){if(OSMDB.pl)return;OSMDB.pl=1;setTimeout(async()=>{const set=new Set(S&&S.hubs||[]);try{(S.routes||[]).forEach(r=>{set.add(r.o);set.add(r.d)})}catch(e){}
+    const q=[...set].filter(k=>AP[k]&&RWY[k]&&!OSMDB.mem[k]).slice(0,14);while(q.length){const k=q.shift();if(!navigator.onLine)break;const o=OSMC[k];if(o&&(o.ok||o.busy))continue;OSMC[k]={ok:0};await incOsmFetch(k);await new Promise(r=>setTimeout(r,6000))}},4000)}
+function incOsm(hub){let o=OSMC[hub];if(o)return o.ok?o:(o.err&&Date.now()-o.err>90000?(o.err=0,incOsmFetch(hub),null):null);
+  let e=OSMDB.mem[hub];if(!e){try{const j=localStorage.getItem('ob-osm4-'+hub);if(j)e={D:JSON.parse(j),t:Date.now()}}catch(err){}}
+  if(e){o=OSMC[hub]={ok:0};incOsmBuild(hub,e.D);if(!o.ok){delete OSMDB.mem[hub];OSMC[hub]={ok:0};incOsmFetch(hub);return null}
+    if(Date.now()-e.t>30*864e5&&!e.rf){e.rf=1;setTimeout(()=>{if(!OSMC[hub].busy)incOsmFetch(hub,1)},6000)}return o}
+  if(!OSMDB.ready)return null;o=OSMC[hub]={ok:0};incOsmFetch(hub);return null}
+osmInit();
+async function incOsmFetch(hub,ref){const A=AP[hub],d=.024,cl=Math.cos(A.lat*Math.PI/180),dl=d/cl,b=[A.lat-d,A.lon-dl,A.lat+d,A.lon+dl].map(v=>v.toFixed(5)).join(','),H='[out:json][timeout:40];',
     Q=[H+'(node["aeroway"~"^(parking_position|gate)$"]('+b+');way["aeroway"="parking_position"]('+b+');way["aeroway"="terminal"]('+b+');way["building"="terminal"]('+b+'););out geom qt;',H+'(way["aeroway"~"^(taxiway|taxilane|runway)$"]('+b+');way["aeroway"="apron"]('+b+'););out geom qt;'];OSMC[hub].busy=1;let why='',els=[];
   const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
   for(const q of Q){let got=null;
     for(let rd=0;rd<2&&!got;rd++){if(rd)await new Promise(r=>setTimeout(r,2500));
       for(const ep of EP){try{const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),30000);const r=await fetch(ep+'?data='+encodeURIComponent(q),{signal:ac.signal});clearTimeout(tm);if(!r.ok){why='server busy ('+r.status+')';continue}const j=await r.json();if(j&&j.elements){got=j.elements;break}why='bad reply'}catch(e){why=e&&e.name==='AbortError'?'timed out':(e&&e.message==='Failed to fetch'?'servers busy or blocked':String(e&&e.message||e).slice(0,40))}}}
     if(!got){OSMC[hub].busy=0;OSMC[hub].why=why;OSMC[hub].err=Date.now()-60000;return}els=els.concat(got)}
-  incOsmBuild(hub,{elements:els},1);if(!OSMC[hub].ok){OSMC[hub].why='no gate data for this airport in OpenStreetMap';OSMC[hub].err=Date.now()}}
+  const snap=ref?Object.assign({},OSMC[hub]):null;incOsmBuild(hub,{elements:els},1);if(!OSMC[hub].ok&&snap&&snap.ok){Object.assign(OSMC[hub],snap);return}if(!OSMC[hub].ok){OSMC[hub].why='no gate data for this airport in OpenStreetMap';OSMC[hub].err=Date.now()}}
 function incGraph(D){const idx=new Map(),V=[],adj=[],id=p=>{const k=p[0]+','+p[1];let i=idx.get(k);if(i===undefined){i=V.length;idx.set(k,i);V.push(p);adj.push([])}return i};
   D.tw.forEach(w=>{for(let i=1;i<w.length;i++){const a=id(w[i-1]),b=id(w[i]);if(a===b)continue;const d=Math.hypot(V[a][0]-V[b][0],V[a][1]-V[b][1]);adj[a].push([b,d]);adj[b].push([a,d])}});return{V,adj}}
 function incDij(G,src){const n=G.V.length,dist=new Float64Array(n).fill(1e18),pr=new Int32Array(n).fill(-1);dist[src]=0;const h=[[0,src]];
@@ -2665,14 +2679,14 @@ function incOsmBuild(hub,j,save){const A=AP[hub],cl=Math.cos(A.lat*Math.PI/180),
       else if(e.type==='way'&&e.geometry){const pts=e.geometry.map(g=>M(g.lat,g.lon));
         if(a==='runway'){if(pts.length>1){const p0=pts[0],p1=pts[pts.length-1],rf=String(t.ref||'').split('/');D.rw.push([p0[0],p0[1],p1[0],p1[1],parseFloat(t.width)||45,rf[0]||'',rf[1]||''])}}else if(a==='taxiway'||a==='taxilane')D.tw.push(pts);else if(a==='apron'){D.ap.push(pts);if(bad)D.bap.push(pts)}else if(a==='terminal'||t.building==='terminal'){if(bad)D.bt.push(pts);else D.tm.push(pts)}
         else if(a==='parking_position'&&!bad){const c=pts.reduce((q,p)=>[q[0]+p[0],q[1]+p[1]],[0,0]);D.st.push([Math.round(c[0]/pts.length),Math.round(c[1]/pts.length)])}}});
-    if(save){try{const x=JSON.stringify(D);if(x.length<700000)localStorage.setItem('ob-osm4-'+hub,x)}catch(e){}}}else D=j;
+    }else D=j;
   if(D.rw&&D.rw.length&&typeof RWY!=='undefined'){const rr=incMergeRw(D.rw).filter(r=>Math.hypot(r[2]-r[0],r[3]-r[1])>400).sort((a,b)=>Math.hypot(b[2]-b[0],b[3]-b[1])-Math.hypot(a[2]-a[0],a[3]-a[1])).slice(0,8);if(rr.length){RWY[hub]=rr;delete INC_LY[hub];try{rwyPersist(hub,1);delete RWS[hub]}catch(e){}}}
   const sg=L=>{const o=[];L.forEach(p=>{for(let i=1;i<p.length;i++)o.push([p[i-1],p[i]]);if(p.length>2)o.push([p[p.length-1],p[0]])});return o},tv=sg(D.tm),bv=sg(D.bt||[]),refS=tv.length?tv:sg(D.ap).length?sg(D.ap):[[[0,0],[0,1]]];
   const inP=(p,poly)=>{let c=false;for(let i=0,k=poly.length-1;i<poly.length;k=i++){const a=poly[i],b=poly[k];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
   const nsd=(p,S)=>{let m=1e18,q=null;S.forEach(([a,b])=>{const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1;let t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));const x=a[0]+dx*t,y=a[1]+dy*t,d=Math.hypot(x-p[0],y-p[1]);if(d<m){m=d;q=[x,y]}});return{d:m,q}};
   let all=[];D.st.forEach(p=>{if(Math.hypot(p[0],p[1])<2600&&!all.some(q=>Math.hypot(q.e-p[0],q.n-p[1])<30)){if((D.bap||[]).some(poly=>inP(p,poly))||(D.bt||[]).some(poly=>inP(p,poly)))return;const r=nsd(p,refS);if(bv.length&&tv.length&&nsd(p,bv).d<Math.min(r.d,60)+1e-9&&nsd(p,bv).d<r.d)return;const m=r.d||1;all.push({e:p[0],n:p[1],d:r.d,dx:(r.q[0]-p[0])/m,dy:(r.q[1]-p[1])/m})}});
   let st=all;if(tv.length){for(const lim of[400,650,1000]){const f=all.filter(x=>x.d<=lim);st=f;if(f.length>=4)break}}
-  st.sort((a,b)=>a.d-b.d);st.length=Math.min(st.length,40);const G=incGraph(D),o=OSMC[hub]||(OSMC[hub]={});Object.assign(o,{D,st,G,rt:{},ok:st.length>=3&&G.V.length>=10?1:0,err:0});delete INC_FL[hub];try{tileRedraw()}catch(e){}}
+  st.sort((a,b)=>a.d-b.d);st.length=Math.min(st.length,40);const G=incGraph(D),o=OSMC[hub]||(OSMC[hub]={});Object.assign(o,{D,st,G,rt:{},ok:st.length>=3&&G.V.length>=10?1:0,err:0});delete INC_FL[hub];if(save&&o.ok)osmPut(hub,D);try{tileRedraw()}catch(e){}}
 function incNearV(G,p,md){let bd=md*md,bi=-1;for(let i=0;i<G.V.length;i++){const d=(G.V[i][0]-p[0])**2+(G.V[i][1]-p[1])**2;if(d<bd){bd=d;bi=i}}return bi}
 function incRoute(hub,Ly){const o=OSMC[hub];if(!o||!o.ok)return null;const key=Ly.t0+'|'+(Ly.act?Ly.act.i+':'+Ly.act.sg:'x');if(o.rt[key]!==undefined)return o.rt[key];const {A,u,L,t0,w}=Ly,G=o.G,nv=[-u[1],u[0]],pr=G.V.map(v=>{const dx=v[0]-A[0],dy=v[1]-A[1];return[(dx*u[0]+dy*u[1])/L,Math.abs(dx*nv[0]+dy*nv[1])]});
   const pick=(lo,hi,tg,dm)=>{let bi=-1,bd=1e9;pr.forEach((p,i)=>{if(p[1]<dm&&p[0]>=lo&&p[0]<=hi&&G.adj[i].length&&Math.abs(p[0]-tg)<bd){bd=Math.abs(p[0]-tg);bi=i}});return bi};
