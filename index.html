@@ -1135,16 +1135,17 @@ function llOff(p,e,n){const cl=Math.cos(p[0]*RAD)||1e-6;return[p[0]+n/111.2,p[1]
 function rwDir(ap){try{const b=rwyActive(ap.iata,now());return b?b.u:null}catch(e){return null}}
 function pushOut(la,lo,w,L){for(const z of L){const R=z[2],cl=Math.cos(z[0]*RAD),dx=((lo-z[1]+540)%360-180)*111.2*cl,dy=(la-z[0])*111.2,dist=Math.hypot(dx,dy);if(dist>=R)continue;const k=dist<1e-3?[0,1]:[dx/dist,dy/dist],tx=dx+(k[0]*R-dx)*w,ty=dy+(k[1]*R-dy)*w;lo=z[1]+tx/(111.2*cl);la=z[0]+ty/111.2}return[la,lo]}
 const RTC=new Map();
-function routeBuild(o,d){const km=gcKm(o,d);if(km<120)return null;
+function rwEnds(ap){try{const b=rwyActive(ap.iata,now());if(!b)return null;const r=b.r,sg=b.sg,far=sg>0?[r[2],r[3]]:[r[0],r[1]],thr=sg>0?[r[0],r[1]]:[r[2],r[3]];return{u:b.u,dep:far,arr:[thr[0]+b.u[0]*350,thr[1]+b.u[1]*350]}}catch(e){return null}}
+function routeBuild(o,d){const km=gcKm(o,d);if(km<25)return null;
   const ST=evAct().map(e=>[e.lat,e.lon,Math.min(e.r2||e.r1*2,e.r1*1.5+40)]),zones=NOFLY.concat(ST).filter(z=>gcKm(o,{lat:z[0],lon:z[1]})>z[2]+30&&gcKm(d,{lat:z[0],lon:z[1]})>z[2]+30),N=Math.max(10,Math.min(60,Math.round(km/70))),sg=o.iata<d.iata?1:-1;
   let h=0;const hk=o.iata<d.iata?o.iata+d.iata:d.iata+o.iata;for(let i=0;i<hk.length;i++)h=(h*31+hk.charCodeAt(i))>>>0;const bulge=km<500?0:Math.min(70,km*.018)*(((h%1000)/1000)*2-1)*sg;
   const fd=Math.min(.3,60/km),fa=Math.min(.3,60/km),M=[];
   for(let i=0;i<=N;i++){const f=i/N;if(f<fd||f>1-fa)continue;let p=gcPt(o,d,f);const q=gcPt(o,d,Math.min(1,f+.01)),cl=Math.cos(p[0]*RAD),tx=((q[1]-p[1]+540)%360-180)*cl,ty=q[0]-p[0],tl=Math.hypot(tx,ty)||1,off=bulge*Math.sin(Math.PI*f);
     p=llOff(p,-ty/tl*off,tx/tl*off);const w=Math.min(1,Math.min(f,1-f)/.12);p=pushOut(p[0],p[1],w,zones);M.push(p)}
   const A=[o.lat,o.lon],B=[d.lat,d.lon],p1=gcPt(o,d,.03),p2=gcPt(o,d,.97),cA=Math.cos(o.lat*RAD),cB=Math.cos(d.lat*RAD);
-  const dd=rwDir(o),da=rwDir(d);
-  let P=[A];if(dd){P.push(llOff(A,dd[0]*14,dd[1]*14),llOff(A,dd[0]*34,dd[1]*34))}
-  P=P.concat(M);if(da){P.push(llOff(B,-da[0]*34,-da[1]*34),llOff(B,-da[0]*14,-da[1]*14))}P.push(B);
+  const eo=rwEnds(o),ed=rwEnds(d),ld=Math.min(1,km/160),dd=eo&&eo.u,da=ed&&ed.u,A0=eo?llOff(A,eo.dep[0]/1000,eo.dep[1]/1000):A,B0=ed?llOff(B,ed.arr[0]/1000,ed.arr[1]/1000):B;
+  let P=[A0];if(dd){P.push(llOff(A0,dd[0]*14*ld,dd[1]*14*ld),llOff(A0,dd[0]*34*ld,dd[1]*34*ld))}
+  P=P.concat(M);if(da){P.push(llOff(B0,-da[0]*34*ld,-da[1]*34*ld),llOff(B0,-da[0]*14*ld,-da[1]*14*ld))}P.push(B0);
   for(let i=1;i<P.length;i++){let dl=P[i][1]-P[i-1][1];while(dl>180){P[i]=[P[i][0],P[i][1]-360];dl-=360}while(dl<-180){P[i]=[P[i][0],P[i][1]+360];dl+=360}}
   for(let it=0;it<2;it++){const Q=[P[0]];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1];Q.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75])}Q.push(P[P.length-1]);P=Q}
   const cum=[0];for(let i=1;i<P.length;i++){const cl=Math.cos((P[i][0]+P[i-1][0])/2*RAD);cum.push(cum[i-1]+Math.hypot((P[i][1]-P[i-1][1])*cl,P[i][0]-P[i-1][0])*111.2)}
