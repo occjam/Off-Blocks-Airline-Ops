@@ -330,7 +330,7 @@ function rwyRestore(k,C,w,n){let sv=null;try{sv=(JSON.parse(localStorage.getItem
   const idc=id=>C.find(c=>c.id===id&&id);const c0=sv&&idc(sv.id);if(!c0||!(sv.seen<=n))return null;
   const hist=[];(sv.h||[]).forEach(h=>{const f=idc(h.f),o=idc(h.o);if(f&&o)hist.push({t:h.t,from:{i:f.i,sg:f.sg,id:f.id},to:{i:o.i,sg:o.sg,id:o.id}})});
   const st={i:c0.i,sg:c0.sg,t:Math.min(sv.t,n),hist};
-  if(n-sv.seen>36e5&&n-sv.seen<4*864e5){for(let tt=Math.ceil(sv.seen/9e5)*9e5;tt<=n-9e5;tt+=9e5){const Ct=rwyScore(RWYof(k),apWind(k,tt,1)||{d:0,s:0});if(!Ct.length)break;if(!rwyStep(st,Ct,tt)){break}}}
+  if(n-sv.seen>9e5&&n-sv.seen<30*864e5){for(let tt=Math.ceil(sv.seen/9e5)*9e5;tt<=n-9e5;tt+=9e5){const Ct=rwyScore(RWYof(k),apWind(k,tt,1)||{d:0,s:0});if(!Ct.length)break;if(!rwyStep(st,Ct,tt)){break}}}
   return st}
 function RWYof(k){return typeof RWY!=='undefined'&&RWY[k]}
 function rwyActive(k,tms,Rs){const R=Rs||(typeof RWY!=='undefined'&&RWY[k]);if(!R||!R.length)return null;const n=now(),isNow=Math.abs(tms-n)<6e5;
@@ -2735,9 +2735,11 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
           stp:k=>OS&&k<OS.st.length?{p:[OS.st[k].e,OS.st[k].n],d:[OS.st[k].dx,OS.st[k].dy]}:{p:pos2(tS(k),235),d:w2},
           outP:k=>rt2&&rt2.out[k]?rt2.out[k]:[pos2(tS(k),235),pos2(tS(k),170),pos2(t02,170),pos2(t02,0)],inP:k=>rt2&&rt2.inn[k]?rt2.inn[k]:[pos2(.5,0),pos2(.5,170),pos2(tS(k),170),pos2(tS(k),235)]}},
         ctxAt=t=>{if(i)return mkCtx(Ly);let st=null;try{st=rwyAt(hub,t)}catch(e){}if(!st||(Ly.act&&st.i===Ly.act.i&&st.sg===Ly.act.sg))return mkCtx(Ly);const L2=incLayOf(hub,st);return L2?mkCtx(L2):mkCtx(Ly)};let hold=0;
-        FL.forEach(f=>{const c=f.col,tp=(n-f.real)/1000,td=f.arr-240000;const dep=n>=f.real-1000&&n<f.real+380000,cx=ctxAt(dep?f.real:td-60000),{pos,u,L,t0,dT,tE,tEnt,tEx,stp,outP,inP}=cx;
+        FL.forEach(f=>{const c=f.col,tp=(n-f.real)/1000,td=f.arr-240000;const dep=n>=f.real-1000&&n<f.real+380000,tcF=i?0:((rwyHist(hub).find(ch=>ch.t>f.real+5000&&ch.t<f.real+200000)||{}).t||0),cx=ctxAt(dep?(tcF&&n>=tcF?tcF:f.real):td-60000),{pos,u,L,t0,dT,tE,tEnt,tEx,stp,outP,inP}=cx;
           if(n>=f.arr&&n<f.real&&f.st>=0){{const sp2=stp(f.st);g+=ac(sp2.p[0],sp2.p[1],sp2.d[0],sp2.d[1],c,1,1,f.id,f.len)}}
-          else if(n>=f.real&&n<f.real+240000&&f.st>=0){const q2=incPathM(outP(f.st),(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
+          else if(n>=f.real&&n<f.real+240000&&f.st>=0){let q2;if(tcF&&n>=tcF){const co=ctxAt(f.real),pc=incPathM(co.outP(f.st),(tcF-f.real)/240000),nw=outP(f.st);let j=0,bd=1e18;nw.forEach((v,z)=>{const d=Math.hypot(v[0]-pc.e,v[1]-pc.n);if(d<bd){bd=d;j=z}});let pts=[[pc.e,pc.n]].concat(nw.slice(j));if(pts.length<3)pts.splice(1,0,[(pts[0][0]+pts[pts.length-1][0])/2,(pts[0][1]+pts[pts.length-1][1])/2]);
+            {const Q=[pts[0]];for(let z=0;z<pts.length-1;z++){const p1=pts[z],p2=pts[z+1];Q.push([p1[0]*.75+p2[0]*.25,p1[1]*.75+p2[1]*.25],[p1[0]*.25+p2[0]*.75,p1[1]*.25+p2[1]*.75])}Q.push(pts[pts.length-1]);pts=Q}
+            q2=incPathM(pts,(n-tcF)/(f.real+240000-tcF))}else q2=incPathM(outP(f.st),(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+240000&&n<f.real+285000){const fr=Math.pow((n-f.real-240000)/45000,1.8),q2=incPathM([pos(tEnt,0),pos(tE,0)],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+285000&&n<f.real+375000){const fr=(n-f.real-285000)/90000,p=pos(tE+dT*fr*3000/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1+.5*fr,1-fr,f.id,f.len)}
           else if(!i&&f.ga&&n>=f.td0-60000&&n<td-60000){const Lo=incLayOf(hub,f.gaFrom);if(Lo){const po=(t,off)=>[Lo.A[0]+Lo.u[0]*t*Lo.L+Lo.w[0]*off,Lo.A[1]+Lo.u[1]*t*Lo.L+Lo.w[1]*off],dTo=Lo.t0<.5?1:-1,tto=Lo.t0+dTo*.12,fr0=(f.gaT-f.td0+60000)/60000;
