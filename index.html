@@ -1148,7 +1148,7 @@ function mapView(){const rs=S.routes.filter(r=>AP[r.o]&&AP[r.d]);
    +'<div style="position:absolute;right:8px;top:8px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:78%"><div style="display:flex;gap:6px"><button id="mfit" '+bt+'>Fit</button><button id="mmenu" '+bt+'>Map options &#9662;</button></div><div id="mpanel" style="display:'+(MS.menu?'grid':'none')+';grid-template-columns:1fr 1fr;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 4px 18px rgba(0,0,0,.45)"><button id="mproj" '+bt+'></button><button id="mstyle" '+bt+'></button><button id="mworld" '+bt+'>World</button><button id="mnight" '+bt+'>Day/night</button><button id="mrv" '+bt+'></button><button id="mspd" '+bt+'></button><button id="mwnd" '+bt+'></button></div></div>'
    +'<div style="position:absolute;left:8px;top:8px;display:flex;flex-direction:column;gap:6px"><button id="mzi" '+bt+'>+</button><button id="mzo" '+bt+'>&minus;</button></div>'
    +'<div id="minfo" style="position:absolute;left:8px;right:8px;bottom:8px"></div></div><div id="mlist"></div>'+(rs.length?'':'<div class="mut">No routes yet. Tap an airport on the map, or use the Routes tab.</div>')}
-function mapLabels(){const p=$('#mproj'),s=$('#mstyle'),q=$('#mspd'),wq=$('#mwnd');if(wq){wq.textContent='Winds: '+(MS.wnd?'on':'off');wq.style.borderColor=MS.wnd?'#7dd3fc':''}if(q){q.textContent=MV.sp>1?'Time: ×'+MV.sp+' · +'+fmtD(MV.off):'Time: Live';q.style.borderColor=MV.sp>1?'#fbbf24':''}if(p)p.textContent=MS.proj==='flat'?'View: Flat':'View: Globe';if(s)s.textContent='Style: '+{dark:'Dark',sat:'Hybrid',ter:'Terrain'}[MS.style]}
+function mapLabels(){const p=$('#mproj'),s=$('#mstyle'),q=$('#mspd'),wq=$('#mwnd');if(wq){wq.textContent='Winds: '+(MS.wnd?'on':'off');wq.style.borderColor=MS.wnd?'#7dd3fc':''}if(q){q.textContent=MV.sp>1?'Time: ×'+MV.sp+' · +'+fmtD(MV.off):'Time: Live';q.style.borderColor=MV.sp>1?'#fbbf24':''}if(p)p.textContent=MS.proj==='flat'?'View: Flat':'View: Globe';if(s)s.textContent='Style: '+{dark:'Dark',sat:'Hybrid',ter:'Terrain',esri:'Satellite (live)',osm:'Street (live)'}[MS.style]}
 function mapInit(){const sv=$('#wm');if(!sv)return;mapSize();
   if(!MT){MT=1;mapFit(1)}
   loadImg('sat',IMG_SAT);loadImg('ter',IMG_TER);mapLabels();
@@ -1226,7 +1226,8 @@ function sunPos(){const d=new Date(now()),doy=(Date.UTC(d.getUTCFullYear(),d.get
 function gcLine(a,b,N,w){let s='',pen=0,pl=null,pv=0;for(let i=0;i<=N;i++){const p=gcPt(a,b,i/N),q=P(p[1],p[0]);
     const brk=!q[2]||(MS.proj==='flat'&&pl!==null&&Math.abs(p[1]-pl)>180);
     if(brk){pen=0}else{s+=(pen?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);pen=1}pl=p[1]}return s}
-function drawFlat(g,W,H,dp){const k=MS.k,st=MS.style;g.setTransform(dp,0,0,dp,0,0);g.clearRect(0,0,W,H);
+function MSB(){return MS.style==='esri'?'sat':MS.style==='osm'?'dark':MS.style}
+function drawFlat(g,W,H,dp){const k=MS.k,st=MSB();g.setTransform(dp,0,0,dp,0,0);g.clearRect(0,0,W,H);
   const x0=MS.cx-W/2/k,y1=MS.cy+H/2/k;
   if(st==='dark'){const cs=getComputedStyle(document.documentElement);g.fillStyle=cs.getPropertyValue('--mapbg')||'#0b1620';g.fillRect(0,0,W,H);
     g.strokeStyle=cs.getPropertyValue('--line')||'#223140';g.globalAlpha=.55;g.lineWidth=1;g.beginPath();const gs=k>40?1:k>12?5:k>4?15:30;
@@ -1241,6 +1242,7 @@ function drawFlat(g,W,H,dp){const k=MS.k,st=MS.style;g.setTransform(dp,0,0,dp,0,
     const fine=FINE.rings&&k>=9;if(k>=9&&!FINE.rings)loadFine();const bords=fine?FINE.bords:COARSE.bords,A=.36*k,B=W/2+(-180-MS.cx)*k,C=H/2+(MS.cy-90)*k,wx0=(x0+180)/.36,wx1=(x0+W/k+180)/.36,wy0=(90-y1)/.36,wy1=(90-(y1-H/k))/.36;
     ringsPath(g,bords,A,B,C,wx0,wx1,wy0,wy1);g.strokeStyle=st==='sat'?'rgba(255,255,255,.55)':'rgba(40,40,40,.55)';g.lineWidth=.8;g.lineJoin='round';g.stroke();
     if(fine&&st==='sat'){ringsPath(g,FINE.rings,A,B,C,wx0,wx1,wy0,wy1);g.strokeStyle='rgba(255,255,255,.28)';g.lineWidth=.8;g.stroke()}}
+  if(MS.style==='esri'||MS.style==='osm')tileLayer(g,W,H,MS.style);
   if(MS.night){const [sl,dec]=sunPos(),dr=dec*RAD;g.beginPath();let first=1;
     for(let lo=-180;lo<=180;lo+=3){const H2=(lo-sl)*RAD,la=Math.atan(-Math.cos(H2)/Math.tan(dr||1e-6))*DEG,q=P(lo,la);if(first){g.moveTo(q[0],q[1]);first=0}else g.lineTo(q[0],q[1])}
     const e=P(180,dec>0?-90:90),f=P(-180,dec>0?-90:90);g.lineTo(e[0],e[1]);g.lineTo(f[0],f[1]);g.closePath();g.fillStyle='rgba(0,0,0,.30)';g.fill()}}
@@ -1269,8 +1271,8 @@ function globeVec(g,q,R,cx,cy,dark){const ke=kEff(),fine=FINE.rings&&ke>=9;if(ke
   g.restore()}
 function globeGlow(g,cx,cy,R){const gr=g.createRadialGradient(cx,cy,R*.96,cx,cy,R*1.06);gr.addColorStop(0,'rgba(120,180,255,.0)');gr.addColorStop(.5,'rgba(120,180,255,.25)');gr.addColorStop(1,'rgba(120,180,255,0)');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R*1.06,0,6.2832);g.fill()}
 function drawGlobe(g,W,H){const cv=g.canvas,w=cv.width,h=cv.height,q=w/W,R=MS.R*q,cx=w/2,cy=h/2;g.setTransform(1,0,0,1,0,0);g.fillStyle='#05080c';g.fillRect(0,0,w,h);
-  if(MS.style==='dark'&&!MS.night){globeVec(g,q,R,cx,cy,true);globeGlow(g,cx,cy,R);return}
-  const tx=texOf(MS.style);if(!tx){g.fillStyle='#10283c';g.beginPath();g.arc(cx,cy,R,0,6.2832);g.fill();return}
+  if(MSB()==='dark'&&!MS.night){globeVec(g,q,R,cx,cy,true);globeGlow(g,cx,cy,R);return}
+  const tx=texOf(MSB());if(!tx){g.fillStyle='#10283c';g.beginPath();g.arc(cx,cy,R,0,6.2832);g.fill();return}
   const x0=Math.max(0,Math.floor(cx-R)),x1=Math.min(w,Math.ceil(cx+R)),y0=Math.max(0,Math.floor(cy-R)),y1=Math.min(h,Math.ceil(cy+R)),iw=x1-x0,ih=y1-y0;if(iw<=0||ih<=0)return;
   const BL=kEff()>=3,img=g.createImageData(iw,ih),o=img.data,T=tx.d,tw=tx.w,th=tx.h,f0=MS.cy*RAD,sf=Math.sin(f0),cf=Math.cos(f0),l0=MS.cx*RAD;
   const [sl,sd]=sunPos(),sfn=sd*RAD,sdl=(sl-MS.cx)*RAD,sx=Math.cos(sfn)*Math.sin(sdl),sy=cf*Math.sin(sfn)-sf*Math.cos(sfn)*Math.cos(sdl),sz=sf*Math.sin(sfn)+cf*Math.cos(sfn)*Math.cos(sdl),night=MS.night;
@@ -1286,7 +1288,7 @@ function mapUpdate(){return mvWrap(mapUpdate0)}
 function mapInfo(){return mvWrap(mapInfo0)}
 function mapUpdate0(){const sv=$('#wm'),cv=$('#mcv');if(!sv||!cv)return;mapSize();mapClamp();mapLabels();{const b=$('#mrv');if(b)b.textContent='Rivals: '+(MS.rv===0?'off':'on')}
   const W=MS.W,H=MS.H,g=cv.getContext('2d');if(MS.proj==='flat')drawFlat(g,W,H,cv.width/W);else drawGlobe(g,W,H);
-  const light=MS.style!=='dark',hubs=new Set(S.hubs||[]),rtc={};S.routes.forEach(r=>{rtc[r.o]=1;rtc[r.d]=1});
+  const light=MSB()!=='dark',hubs=new Set(S.hubs||[]),rtc={};S.routes.forEach(r=>{rtc[r.o]=1;rtc[r.d]=1});
   const ke=kEff(),lim=ke<2?1:ke<4?1.5:ke<8?2:ke<18?2.6:4;let all='',rt='',hb='',sl='';const lab=[];
   MHUB=new Set([...hubs,...Object.keys(rtc)]);for(const k in AP){const A=AP[k];if(!apVis(A,k,ke))continue;const q=P(A.lon,A.lat);if(!q[2]||q[0]<-20||q[0]>W+20||q[1]<-20||q[1]>H+20)continue;const seg='M'+q[0].toFixed(1)+' '+q[1].toFixed(1)+'h0';
     if(MSEL&&MSEL.ap===k)sl+=seg;else if(hubs.has(k))hb+=seg;else if(rtc[k])rt+=seg;else all+=seg;
@@ -1382,7 +1384,7 @@ document.addEventListener('click',e=>{const id=e.target.id;
   else if(id==='mwnd'){MS.wnd=MS.wnd?0:1;mapUpdate()}
   else if(id==='mspd'){const L=[1,60,300,1000],i=L.indexOf(MV.sp);MV.sp=L[(i+1)%L.length];if(MV.sp===1)MV.off=0;MV.t=performance.now();mapUpdate()}
   else if(id==='mproj'){MS.proj=MS.proj==='flat'?'globe':'flat';if(MS.proj==='globe'){MS.R=Math.min(MS.W,MS.H)*.42*Math.min(4,Math.max(1,MS.k/kMin()*.5))}else{MS.k=Math.max(kMin(),Math.min(40,MS.R/DEG*1.4))}mapClamp();mapUpdate()}
-  else if(id==='mstyle'){MS.style=MS.style==='dark'?'sat':MS.style==='sat'?'ter':'dark';mapUpdate()}
+  else if(id==='mstyle'){MS.style={dark:'sat',sat:'ter',ter:'esri',esri:'osm',osm:'dark'}[MS.style]||'dark';mapUpdate()}
   else if(id==='mzap'){const A=AP[MSEL.ap];if(A){MS.proj='flat';MS.cx=A.lon;MS.cy=A.lat;MS.k=Math.min(kMax(),Math.max(4000,MS.W*.6/(2600/111320)));mapClamp();mapUpdate()}}
   else if(id==='mzi'||id==='mzo'){const sv=$('#wm'),b=sv.getBoundingClientRect();mapZoom(id==='mzi'?.6:1.65,b.left+b.width/2,b.top+b.height/2)}
   else if(id==='mnew'){const d=e.target.dataset.d;NR={reg:null,d:d,dep:480,rt:2,fm:1};tab='routes';render()}});
@@ -2565,23 +2567,23 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
   const DG=180/Math.PI;
   const cand=ke>=100?Object.keys(RWY).filter(k=>AP[k]):[];
   hubs.forEach(h=>{if(incAct(h,n)&&ke<100){const A=AP[h],q=P(A.lon,A.lat);if(q[2]&&q[0]>-40&&q[0]<W+40&&q[1]>-40&&q[1]<H+40){const ph=(n%1400)/1400;o+='<g style="pointer-events:none"><circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(6+10*ph).toFixed(1)+'" fill="#e5484d" opacity="'+(1-ph*.85).toFixed(2)+'"/><circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="4" fill="#e5484d" stroke="#fff" stroke-width="1.5"/><text x="'+q[0].toFixed(1)+'" y="'+(q[1]-14).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#ff8a8e" stroke="#000" stroke-width="2.5" paint-order="stroke" font-family="ui-monospace,monospace">RWY CLOSED</text></g>'}}});
-  const s=ke/111320;
-  cand.forEach(hub=>{const A=AP[hub],q=P(A.lon,A.lat),rd=3400*s+20;if(!q[2]||q[0]<-rd||q[0]>W+rd||q[1]<-rd||q[1]>H+rd)return;const Ly=incLay(hub);if(!Ly)return;
-    const {R,A:a,B:b,L,u,w,t0}=Ly,isHub=hubs.includes(hub),i=isHub?incAct(hub,n):null,X=(e,nn)=>[q[0]+e*s,q[1]-nn*s],pos=(t,off)=>[a[0]+u[0]*t*L+w[0]*off,a[1]+u[1]*t*L+w[1]*off],PX=(t,off)=>{const p=pos(t,off),x=X(p[0],p[1]);return x[0].toFixed(1)+','+x[1].toFixed(1)};
+  const s=ke/111320;const tl=MS.style==='esri'||MS.style==='osm';
+  cand.forEach(hub=>{const A=AP[hub],q=P(A.lon,A.lat),xf=1/Math.cos(A.lat*Math.PI/180),rd=3400*s*xf+20;if(!q[2]||q[0]<-rd||q[0]>W+rd||q[1]<-rd||q[1]>H+rd)return;const Ly=incLay(hub);if(!Ly)return;
+    const {R,A:a,B:b,L,u,w,t0}=Ly,isHub=hubs.includes(hub),i=isHub?incAct(hub,n):null,X=(e,nn)=>[q[0]+e*s*xf,q[1]-nn*s],pos=(t,off)=>[a[0]+u[0]*t*L+w[0]*off,a[1]+u[1]*t*L+w[1]*off],PX=(t,off)=>{const p=pos(t,off),x=X(p[0],p[1]);return x[0].toFixed(1)+','+x[1].toFixed(1)};
     const poly=(pts,f,st,sw)=>'<polygon points="'+pts.map(p=>PX(p[0],p[1])).join(' ')+'" fill="'+f+'"'+(st?' stroke="'+st+'" stroke-width="'+(sw||1)+'"':'')+'/>',ln=(p1,p2,c,wm,minpx,extra)=>{const x1=X(...pos(p1[0],p1[1])),x2=X(...pos(p2[0],p2[1]));return'<line x1="'+x1[0].toFixed(1)+'" y1="'+x1[1].toFixed(1)+'" x2="'+x2[0].toFixed(1)+'" y2="'+x2[1].toFixed(1)+'" stroke="'+c+'" stroke-width="'+Math.max(minpx,wm*s).toFixed(1)+'"'+(extra||'')+'/>'};
     let g='<g style="pointer-events:none">';
     const full=ke>=500,hl=Math.min(.34,(Math.min(14,incNS(hub))+incNR(hub))*30/L+.04),NS=incNS(hub),NT=NS+incNR(hub),sp=Math.min(60,(2*hl*L-60)/NT),tS=k=>k<NS?.5+((k-(NS-1)/2)*sp)/L:.5+((k-NS)%2?1:-1)*((NS/2+.5+Math.floor((k-NS)/2))*sp)/L;
-    if(full){g+=poly([[-.04,-300],[1.04,-300],[1.04,700],[-.04,700]],'rgba(120,135,150,.14)','rgba(160,175,190,.4)',1);
+    if(full&&!tl){g+=poly([[-.04,-300],[1.04,-300],[1.04,700],[-.04,700]],'rgba(120,135,150,.14)','rgba(160,175,190,.4)',1);
       g+=ln([.02,170],[.98,170],'#46515f',23,1.6);[t0,.5,1-t0].forEach(t=>{g+=ln([t,0],[t,170],'#46515f',23,1.6)});
       g+=poly([[.5-hl-.03,170],[.5+hl+.03,170],[.5+hl+.03,520],[.5-hl-.03,520]],'#2c3640','#46515f',1);
       g+=poly([[.5-hl,520],[.5+hl,520],[.5+hl,565],[.5-hl,565]],'#7d8da1','#c6d1de',1)}
-    R.forEach(rr=>{const p1=X(rr[0],rr[1]),p2=X(rr[2],rr[3]),wpx=Math.max(rr[4]*s,2.4),th=Math.atan2(p2[1]-p1[1],p2[0]-p1[0])*DG,cl=!!i&&rr===R[0];
+    R.forEach(rr=>{if(tl&&!(i&&rr===R[0]))return;const p1=X(rr[0],rr[1]),p2=X(rr[2],rr[3]),wpx=Math.max(rr[4]*s,2.4),th=Math.atan2(p2[1]-p1[1],p2[0]-p1[0])*DG,cl=!!i&&rr===R[0];
       g+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#9fb0c3" stroke-width="'+(wpx+1.6).toFixed(1)+'"/><line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="'+(cl?'url(#inch2)':'#394554')+'" stroke-width="'+wpx.toFixed(1)+'"/>';
       if(cl)g+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#e5484d" stroke-width="1.2" opacity=".9"/>';
       if(wpx>=6){g+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#e2e8f0" stroke-width="'+Math.max(.8,.9*s*1).toFixed(1)+'" stroke-dasharray="'+(30*s).toFixed(1)+' '+(20*s).toFixed(1)+'"/>';
         [[p1,rr[5],th,1],[p2,rr[6],th+180,-1]].forEach(([p,id,a2,sg])=>{const d=Math.hypot(p2[0]-p1[0],p2[1]-p1[1])||1,ux=(p2[0]-p1[0])/d*sg,uy=(p2[1]-p1[1])/d*sg,tx=p[0]+ux*Math.min(70*s,d/4),ty=p[1]+uy*Math.min(70*s,d/4);g+='<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" font-size="'+Math.min(26,Math.max(8,22*s*3)).toFixed(1)+'" font-weight="700" fill="#e2e8f0" font-family="ui-monospace,monospace" transform="rotate('+(a2+90).toFixed(1)+' '+tx.toFixed(1)+' '+ty.toFixed(1)+')">'+id+'</text>'})}});
     const minL=ke>=2500?10:0,ps=Math.max(38*s,minL)/14.5;
-    const ac=(e,nn,dx,dy,c,sc,op,id,len)=>{const p=X(e,nn);if(id)MGA.push({id,hub,X:p[0],Y:p[1]});const ang=Math.atan2(-dy,dx)*DG,lm=len||38,pl=Math.max(lm*s*(sc||1),minL*Math.sqrt(lm/38)*(sc||1))/21;return'<g transform="translate('+p[0].toFixed(1)+' '+p[1].toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+pl.toFixed(3)+')" fill="'+c+'" stroke="#06101a" stroke-width=".9" opacity="'+(op==null?1:op).toFixed(2)+'"><path d="'+PLANE+'"/></g>'};
+    const ac=(e,nn,dx,dy,c,sc,op,id,len)=>{const p=X(e,nn);if(id)MGA.push({id,hub,X:p[0],Y:p[1]});const ang=Math.atan2(-dy,dx)*DG,lm=len||38,pl=Math.max(lm*s*(sc||1),minL*Math.sqrt(lm/38)*(sc||1))/21;return'<g transform="translate('+p[0].toFixed(1)+' '+p[1].toFixed(1)+') scale('+xf.toFixed(3)+' 1) rotate('+ang.toFixed(1)+') scale('+pl.toFixed(3)+')" fill="'+c+'" stroke="#06101a" stroke-width=".9" opacity="'+(op==null?1:op).toFixed(2)+'"><path d="'+PLANE+'"/></g>'};
     const path=(pts,f)=>{const m=pts.map(p=>pos(p[0],p[1])),cum=[0];for(let k=1;k<m.length;k++)cum.push(cum[k-1]+Math.hypot(m[k][0]-m[k-1][0],m[k][1]-m[k-1][1]));const tot=cum[cum.length-1],d=Math.max(0,Math.min(1,f))*tot;let k=1;while(k<m.length-1&&cum[k]<d)k++;const sg=cum[k]-cum[k-1]||1,r=(d-cum[k-1])/sg;return{e:m[k-1][0]+(m[k][0]-m[k-1][0])*r,n:m[k-1][1]+(m[k][1]-m[k-1][1])*r,dx:m[k][0]-m[k-1][0],dy:m[k][1]-m[k-1][1]}};
     if(ke>=2500&&full){
       {const FL=incFl(hub,n),dT=t0<.5?1:-1,tE=t0<.5?1:0;let hold=0;
@@ -2603,11 +2605,27 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
     g+='</g>';
     const lx=q[0],ly=Math.min(...[X(...pos(0,0))[1],X(...pos(1,0))[1],X(...pos(.5,565))[1]])-14;
     g+='<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+(i?'#ff8a8e':'#e6edf5')+'" stroke="#06101a" stroke-width="3" paint-order="stroke" font-family="ui-monospace,monospace" style="pointer-events:none">'+hub+' · '+(A.city||'')+(i?' · RWY CLOSED '+Math.ceil((i.until-n)/MIN)+' MIN':'')+'</text>';
-    if(full&&ke>=8000){const tc=X(...pos(.5,590));g+='<text x="'+tc[0].toFixed(1)+'" y="'+tc[1].toFixed(1)+'" text-anchor="middle" font-size="10" fill="#c6d1de" stroke="#06101a" stroke-width="2.5" paint-order="stroke" font-family="ui-monospace,monospace" style="pointer-events:none">TERMINAL</text>'}
+    if(full&&!tl&&ke>=8000){const tc=X(...pos(.5,590));g+='<text x="'+tc[0].toFixed(1)+'" y="'+tc[1].toFixed(1)+'" text-anchor="middle" font-size="10" fill="#c6d1de" stroke="#06101a" stroke-width="2.5" paint-order="stroke" font-family="ui-monospace,monospace" style="pointer-events:none">TERMINAL</text>'}
     o+=g});
   return o}
 function incMapLayer(P,ke,W,H){if(MS.proj!=='flat')return'';return'<g id="afl">'+incAf(P,ke,W,H)+'</g>'}
 setInterval(()=>{if(document.hidden||typeof tab==='undefined'||tab!=='map'||typeof MS==='undefined'||MS.proj!=='flat')return;const e=document.getElementById('afl');if(!e||MS.k<2500)return;try{e.innerHTML=incAf(P,MS.k,MS.W,MS.H)}catch(x){}},300);
+
+/* live map tiles (Esri satellite / CARTO dark street), drawn into the game's flat projection */
+const TILE={c:new Map(),u:{esri:(z,x,y)=>'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x,osm:(z,x,y)=>'https://'+'abcd'[(x+y)%4]+'.basemaps.cartocdn.com/dark_all/'+z+'/'+x+'/'+y+'@2x.png'},at:{esri:'© Esri, Maxar, Earthstar Geographics',osm:'© OpenStreetMap contributors © CARTO'},mx:{esri:19,osm:20},q:0,err:0,ok:0};
+function tileGet(st,z,x,y,load){const key=st+z+'/'+x+'/'+y;let t=TILE.c.get(key);if(t){TILE.c.delete(key);TILE.c.set(key,t);return t}if(!load)return null;
+  t={ok:0,im:new Image()};t.im.onload=()=>{t.ok=1;TILE.ok++;tileRedraw()};t.im.onerror=()=>{t.err=1;TILE.err++};t.im.src=TILE.u[st](z,x,y);TILE.c.set(key,t);if(TILE.c.size>500)TILE.c.delete(TILE.c.keys().next().value);return t}
+function tileRedraw(){if(TILE.q)return;TILE.q=1;requestAnimationFrame(()=>{TILE.q=0;try{mapUpdate()}catch(e){}})}
+function tileLat(y,n){return Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI}
+function tileLayer(g,W,H,st){const k=MS.k;if(k<30)return;let z=Math.round(Math.log2(k*360/400));z=Math.max(4,Math.min(TILE.mx[st],z));const n=Math.pow(2,z),lo0=MS.cx-W/2/k,lo1=MS.cx+W/2/k,laT=Math.min(84,MS.cy+H/2/k),laB=Math.max(-84,MS.cy-H/2/k),
+    ty=la=>{const r=la*Math.PI/180;return(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n},x0=Math.max(0,Math.floor((lo0+180)/360*n)),x1=Math.min(n-1,Math.floor((lo1+180)/360*n)),y0=Math.max(0,Math.floor(ty(laT))),y1=Math.min(n-1,Math.floor(ty(laB)));
+  if((x1-x0+1)*(y1-y0+1)>80)return;const px=lo=>W/2+(lo-MS.cx)*k,py=la=>H/2-(la-MS.cy)*k,SG=z<9?8:1;g.imageSmoothingEnabled=true;
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const t=tileGet(st,z,x,y,1);let im=t.ok?t.im:null,sx=0,sy=0,sw=0,sh=0;
+    if(!im){for(let dz=1;dz<=4&&z-dz>=3;dz++){const ta=tileGet(st,z-dz,x>>dz,y>>dz,0);if(ta&&ta.ok){im=ta.im;const f=Math.pow(2,dz),sz=im.naturalWidth;sw=sz/f;sh=sz/f;sx=(x-((x>>dz)<<dz))*sw;sy=(y-((y>>dz)<<dz))*sh;break}}}
+    if(!im)continue;if(t.ok){sw=im.naturalWidth;sh=im.naturalHeight}
+    const X0=px(x/n*360-180),X1=px((x+1)/n*360-180);for(let j=0;j<SG;j++){const Y0=py(tileLat(y+j/SG,n)),Y1=py(tileLat(y+(j+1)/SG,n));g.drawImage(im,sx,sy+sh*j/SG,sw,sh/SG,X0-.4,Y0-.4,X1-X0+.8,Y1-Y0+.8)}}
+  g.font='9px sans-serif';g.textAlign='right';g.fillStyle='rgba(0,0,0,.55)';const tw=g.measureText(TILE.at[st]).width+8;g.fillRect(W-tw-2,H-14,tw+2,14);g.fillStyle='#fff';g.fillText(TILE.at[st],W-5,H-4);g.textAlign='left';
+  if(TILE.err>8&&!TILE.ok){g.fillStyle='rgba(0,0,0,.6)';g.fillRect(0,H-34,W,18);g.fillStyle='#ffd27a';g.fillText('Map tiles are not loading (offline or blocked)',8,H-21)}}
 /* ---------- backup: export and import your airline ---------- */
 function bkCode(){const p=PR.find(x=>x.id===CUR);return JSON.stringify({gom:1,name:S.name,saved:Date.now(),game:p?p.id:'',S})}
 function bkCard(){let sz=0;try{sz=Math.round(bkCode().length/1024)}catch(e){}
