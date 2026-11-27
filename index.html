@@ -315,19 +315,31 @@ function wxOps(dst,t,arr,id,pax){const tn=now(),live=Math.abs(arr-tn)<3*36e5;let
   return o}
 
 /* surface wind and the runway in use. Live airport wind when we have it, otherwise a smooth model (trades in the tropics, westerlies in mid-latitudes, slowly veering). The runway changes only when the wind makes the active one a tailwind and another is clearly better, never on a timer. */
-function apWind(k,tms){const a=WX.ap&&WX.ap[k];if(a&&a.wd!=null&&a.ws!=null&&WX.apt&&Math.abs(tms-now())<2*36e5)return{d:a.wd,s:a.ws,live:1};const A=AP[k];if(!A)return null;const al=Math.abs(A.lat),t=tms/36e5,h=hs(k+'wm'),p1=(h%1000)/1000*6.283,p2=((h>>>10)%1000)/1000*6.283,
+function apWind(k,tms,nl){const a=WX.ap&&WX.ap[k];if(!nl&&a&&a.wd!=null&&a.ws!=null&&WX.apt&&Math.abs(tms-now())<2*36e5)return{d:a.wd,s:a.ws,live:1};const A=AP[k];if(!A)return null;const al=Math.abs(A.lat),t=tms/36e5,h=hs(k+'wm'),p1=(h%1000)/1000*6.283,p2=((h>>>10)%1000)/1000*6.283,
   base=al<28?(A.lat>=0?75:115):al<62?(A.lat>=0?265:285):320,T=6.283;
   return{d:Math.round(((base+60*Math.sin(T*t/26+p1)+30*Math.sin(T*t/9+p2)+720)%360)/10)*10,s:Math.max(2,Math.round(7+4*Math.sin(T*t/17+p2)+3*Math.sin(T*t/6.3+p1))),live:0}}
 const RWS={};
 function rwyScore(R,w){const L0=Math.hypot(R[0][2]-R[0][0],R[0][3]-R[0][1])||1,o=[];R.forEach((r,i)=>{const hx=r[2]-r[0],hy=r[3]-r[1],l=Math.hypot(hx,hy);if(l<L0*.6)return;[1,-1].forEach(sg=>{const ux=hx/l*sg,uy=hy/l*sg,hdg=(Math.atan2(ux,uy)*180/Math.PI+360)%360,hw=Math.cos((hdg-w.d)*Math.PI/180)*w.s;o.push({i,r,sg,u:[ux,uy],hdg,hw,sc:hw+(l/L0)*2,w,id:(sg>0?r[5]:r[6])||''})})});return o}
+const RWK='ob-rws1';
+function rwyPersist(k,force){try{const st=RWS[k];if(!st||!st.id)return;const n=now();if(!force&&st.sv&&n-st.sv<60000)return;st.sv=n;const all=JSON.parse(localStorage.getItem(RWK)||'{}');all[k]={id:st.id,t:st.t,seen:n,h:(st.hist||[]).map(h=>({t:h.t,f:h.from.id,o:h.to.id}))};localStorage.setItem(RWK,JSON.stringify(all))}catch(e){}}
+function rwyStep(st,C,tt){const cur=C.find(c=>c.i===st.i&&c.sg===st.sg);if(!cur)return null;const best=C.reduce((a,b)=>b.sc>a.sc?b:a);
+  if(cur!==best&&(best.hw-cur.hw>=5)&&(cur.hw<3)&&tt-st.t>=30*60000){st.hist.push({t:tt,from:{i:cur.i,sg:cur.sg,id:cur.id},to:{i:best.i,sg:best.sg,id:best.id}});if(st.hist.length>12)st.hist.shift();st.i=best.i;st.sg=best.sg;st.t=tt;return best}
+  return cur}
+/* app was closed: pick the saved runway state back up and replay the gap with the model wind and the same rules, so changes (and the go-arounds they caused) still happened */
+function rwyRestore(k,C,w,n){let sv=null;try{sv=(JSON.parse(localStorage.getItem(RWK)||'{}'))[k]}catch(e){}
+  const idc=id=>C.find(c=>c.id===id&&id);const c0=sv&&idc(sv.id);if(!c0||!(sv.seen<=n))return null;
+  const hist=[];(sv.h||[]).forEach(h=>{const f=idc(h.f),o=idc(h.o);if(f&&o)hist.push({t:h.t,from:{i:f.i,sg:f.sg,id:f.id},to:{i:o.i,sg:o.sg,id:o.id}})});
+  const st={i:c0.i,sg:c0.sg,t:Math.min(sv.t,n),hist};
+  if(n-sv.seen>36e5&&n-sv.seen<4*864e5){for(let tt=Math.ceil(sv.seen/9e5)*9e5;tt<=n-9e5;tt+=9e5){const Ct=rwyScore(RWYof(k),apWind(k,tt,1)||{d:0,s:0});if(!Ct.length)break;if(!rwyStep(st,Ct,tt)){break}}}
+  return st}
+function RWYof(k){return typeof RWY!=='undefined'&&RWY[k]}
 function rwyActive(k,tms,Rs){const R=Rs||(typeof RWY!=='undefined'&&RWY[k]);if(!R||!R.length)return null;const n=now(),isNow=Math.abs(tms-n)<6e5;
   const w=apWind(k,tms)||{d:0,s:0},C=rwyScore(R,w);if(!C.length)return null;const best=C.reduce((a,b)=>b.sc>a.sc?b:a);
   if(!isNow||Rs)return best;
   let st=RWS[k];if(st&&(st.t>n||!C.find(c=>c.i===st.i&&c.sg===st.sg)))st=null;
-  if(!st){RWS[k]={i:best.i,sg:best.sg,t:n,hist:(RWS[k]&&RWS[k].hist)||[]};return best}
-  const cur=C.find(c=>c.i===st.i&&c.sg===st.sg);
-  if(cur!==best&&(best.hw-cur.hw>=5)&&(cur.hw<3)&&n-st.t>=30*60000){st.hist.push({t:n,from:{i:st.i,sg:st.sg,id:cur.id},to:{i:best.i,sg:best.sg,id:best.id}});if(st.hist.length>12)st.hist.shift();st.i=best.i;st.sg=best.sg;st.t=n;return best}
-  return cur}
+  if(!st){const r=rwyRestore(k,C,w,n);if(r){r.id=(C.find(c=>c.i===r.i&&c.sg===r.sg)||{}).id;RWS[k]=r;st=r}else{RWS[k]={i:best.i,sg:best.sg,t:n,hist:[],id:best.id};rwyPersist(k,1);return best}}
+  const o=rwyStep(st,C,n);if(!o)return best;st.id=o.id;rwyPersist(k,o.i!==undefined&&st.t===n);return o}
+function rwyAt(k,t){const st=RWS[k];if(!st)return null;const H=st.hist||[];for(let j=H.length-1;j>=0;j--)if(H[j].t<=t)return{i:H[j].to.i,sg:H[j].to.sg};if(H.length&&t<H[0].t)return{i:H[0].from.i,sg:H[0].from.sg};return{i:st.i,sg:st.sg}}
 function rwyHist(k){return(RWS[k]&&RWS[k].hist)||[]}
 function rwyLine(k){try{const b=rwyActive(k,now());if(!b)return'';const h=rwyHist(k),l=h[h.length-1],ago=l?Math.round((now()-l.t)/60000):0;return'<div class="mut">Runway in use <b style="color:var(--tx)">'+(b.id||Math.round(b.hdg/10))+'</b> · wind '+String(Math.round(b.w.d)).padStart(3,'0')+'° '+Math.round(b.w.s)+' kt ('+(b.w.live?'live':'model')+') · headwind '+Math.max(0,Math.round(b.hw))+' kt'+(l&&ago<180?' · changed from '+l.from.id+' '+ago+' min ago':'')+'</div>'}catch(e){return''}}
 
@@ -2653,7 +2665,7 @@ function incOsmBuild(hub,j,save){const A=AP[hub],cl=Math.cos(A.lat*Math.PI/180),
         if(a==='runway'){if(pts.length>1){const p0=pts[0],p1=pts[pts.length-1],rf=String(t.ref||'').split('/');D.rw.push([p0[0],p0[1],p1[0],p1[1],parseFloat(t.width)||45,rf[0]||'',rf[1]||''])}}else if(a==='taxiway'||a==='taxilane')D.tw.push(pts);else if(a==='apron'){D.ap.push(pts);if(bad)D.bap.push(pts)}else if(a==='terminal'||t.building==='terminal'){if(bad)D.bt.push(pts);else D.tm.push(pts)}
         else if(a==='parking_position'&&!bad){const c=pts.reduce((q,p)=>[q[0]+p[0],q[1]+p[1]],[0,0]);D.st.push([Math.round(c[0]/pts.length),Math.round(c[1]/pts.length)])}}});
     if(save){try{const x=JSON.stringify(D);if(x.length<700000)localStorage.setItem('ob-osm4-'+hub,x)}catch(e){}}}else D=j;
-  if(D.rw&&D.rw.length&&typeof RWY!=='undefined'){const rr=incMergeRw(D.rw).filter(r=>Math.hypot(r[2]-r[0],r[3]-r[1])>400).sort((a,b)=>Math.hypot(b[2]-b[0],b[3]-b[1])-Math.hypot(a[2]-a[0],a[3]-a[1])).slice(0,8);if(rr.length){RWY[hub]=rr;delete INC_LY[hub];try{delete RWS[hub]}catch(e){}}}
+  if(D.rw&&D.rw.length&&typeof RWY!=='undefined'){const rr=incMergeRw(D.rw).filter(r=>Math.hypot(r[2]-r[0],r[3]-r[1])>400).sort((a,b)=>Math.hypot(b[2]-b[0],b[3]-b[1])-Math.hypot(a[2]-a[0],a[3]-a[1])).slice(0,8);if(rr.length){RWY[hub]=rr;delete INC_LY[hub];try{rwyPersist(hub,1);delete RWS[hub]}catch(e){}}}
   const sg=L=>{const o=[];L.forEach(p=>{for(let i=1;i<p.length;i++)o.push([p[i-1],p[i]]);if(p.length>2)o.push([p[p.length-1],p[0]])});return o},tv=sg(D.tm),bv=sg(D.bt||[]),refS=tv.length?tv:sg(D.ap).length?sg(D.ap):[[[0,0],[0,1]]];
   const inP=(p,poly)=>{let c=false;for(let i=0,k=poly.length-1;i<poly.length;k=i++){const a=poly[i],b=poly[k];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
   const nsd=(p,S)=>{let m=1e18,q=null;S.forEach(([a,b])=>{const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1;let t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));const x=a[0]+dx*t,y=a[1]+dy*t,d=Math.hypot(x-p[0],y-p[1]);if(d<m){m=d;q=[x,y]}});return{d:m,q}};
@@ -2661,7 +2673,7 @@ function incOsmBuild(hub,j,save){const A=AP[hub],cl=Math.cos(A.lat*Math.PI/180),
   let st=all;if(tv.length){for(const lim of[400,650,1000]){const f=all.filter(x=>x.d<=lim);st=f;if(f.length>=4)break}}
   st.sort((a,b)=>a.d-b.d);st.length=Math.min(st.length,40);const G=incGraph(D),o=OSMC[hub]||(OSMC[hub]={});Object.assign(o,{D,st,G,rt:{},ok:st.length>=3&&G.V.length>=10?1:0,err:0});delete INC_FL[hub];try{tileRedraw()}catch(e){}}
 function incNearV(G,p,md){let bd=md*md,bi=-1;for(let i=0;i<G.V.length;i++){const d=(G.V[i][0]-p[0])**2+(G.V[i][1]-p[1])**2;if(d<bd){bd=d;bi=i}}return bi}
-function incRoute(hub,Ly){const o=OSMC[hub];if(!o||!o.ok)return null;const key=Ly.t0;if(o.rt[key]!==undefined)return o.rt[key];const {A,u,L,t0,w}=Ly,G=o.G,nv=[-u[1],u[0]],pr=G.V.map(v=>{const dx=v[0]-A[0],dy=v[1]-A[1];return[(dx*u[0]+dy*u[1])/L,Math.abs(dx*nv[0]+dy*nv[1])]});
+function incRoute(hub,Ly){const o=OSMC[hub];if(!o||!o.ok)return null;const key=Ly.t0+'|'+(Ly.act?Ly.act.i+':'+Ly.act.sg:'x');if(o.rt[key]!==undefined)return o.rt[key];const {A,u,L,t0,w}=Ly,G=o.G,nv=[-u[1],u[0]],pr=G.V.map(v=>{const dx=v[0]-A[0],dy=v[1]-A[1];return[(dx*u[0]+dy*u[1])/L,Math.abs(dx*nv[0]+dy*nv[1])]});
   const pick=(lo,hi,tg,dm)=>{let bi=-1,bd=1e9;pr.forEach((p,i)=>{if(p[1]<dm&&p[0]>=lo&&p[0]<=hi&&G.adj[i].length&&Math.abs(p[0]-tg)<bd){bd=Math.abs(p[0]-tg);bi=i}});return bi};
   let eV=pick(t0<.5?-.03:.7,t0<.5?.3:1.03,t0,45),xV=pick(t0<.5?.3:.15,t0<.5?.85:.7,t0<.5?.55:.45,45);if(eV<0)eV=pick(t0<.5?-.05:.65,t0<.5?.35:1.05,t0,110);if(xV<0)xV=pick(t0<.5?.25:.1,t0<.5?.9:.75,t0<.5?.55:.45,110);
   if(eV<0||xV<0||eV===xV)return o.rt[key]=null;const pe=incDij(G,eV),px=incDij(G,xV),tEnt=pr[eV][0],tEx=pr[xV][0],pos=(t,off)=>[A[0]+u[0]*t*L+w[0]*off,A[1]+u[1]*t*L+w[1]*off],out=[],inn=[];
@@ -2718,9 +2730,12 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
     const ac=(e,nn,dx,dy,c,sc,op,id,len)=>{const p=X(e,nn);if(id)MGA.push({id,hub,X:p[0],Y:p[1]});const ang=Math.atan2(-dy,dx)*DG,lm=len||38,pl=Math.max(lm*s*(sc||1),minL*Math.sqrt(lm/38)*(sc||1))/21;return'<g transform="translate('+p[0].toFixed(1)+' '+p[1].toFixed(1)+') scale('+xf.toFixed(3)+' 1) rotate('+ang.toFixed(1)+') scale('+pl.toFixed(3)+')" fill="'+c+'" stroke="#06101a" stroke-width=".9" opacity="'+(op==null?1:op).toFixed(2)+'"><path d="'+PLANE+'"/></g>'};
     const path=(pts,f)=>{const m=pts.map(p=>pos(p[0],p[1])),cum=[0];for(let k=1;k<m.length;k++)cum.push(cum[k-1]+Math.hypot(m[k][0]-m[k-1][0],m[k][1]-m[k-1][1]));const tot=cum[cum.length-1],d=Math.max(0,Math.min(1,f))*tot;let k=1;while(k<m.length-1&&cum[k]<d)k++;const sg=cum[k]-cum[k-1]||1,r=(d-cum[k-1])/sg;return{e:m[k-1][0]+(m[k][0]-m[k-1][0])*r,n:m[k-1][1]+(m[k][1]-m[k-1][1])*r,dx:m[k][0]-m[k-1][0],dy:m[k][1]-m[k-1][1]}};
     if(ke>=2500&&full&&(!tl||OS)){
-      {const FL=incFl(hub,n),dT=t0<.5?1:-1,tE=t0<.5?1:0,tEnt=rt?rt.tEnt:t0,tEx=rt?rt.tEx:.5,stp=k=>OS&&k<OS.st.length?{p:[OS.st[k].e,OS.st[k].n],d:[OS.st[k].dx,OS.st[k].dy]}:{p:pos(tS(k),235),d:w},
-        outP=k=>rt&&rt.out[k]?rt.out[k]:[pos(tS(k),235),pos(tS(k),170),pos(t0,170),pos(t0,0)],inP=k=>rt&&rt.inn[k]?rt.inn[k]:[pos(.5,0),pos(.5,170),pos(tS(k),170),pos(tS(k),235)];let hold=0;
-        FL.forEach(f=>{const c=f.col,tp=(n-f.real)/1000,td=f.arr-240000;
+      {const FL=incFl(hub,n),CX={},mkCtx=Ly2=>{const kk=Ly2===Ly?'cur':(Ly2.act?Ly2.act.i+':'+Ly2.act.sg:'x');if(CX[kk])return CX[kk];const {A:a2,u:u2,w:w2,L:L2,t0:t02}=Ly2,pos2=(t,off)=>[a2[0]+u2[0]*t*L2+w2[0]*off,a2[1]+u2[1]*t*L2+w2[1]*off],rt2=OS?incRoute(hub,Ly2):null,tEnt2=rt2?rt2.tEnt:t02;
+          return CX[kk]={pos:pos2,u:u2,w:w2,L:L2,t0:t02,dT:t02<.5?1:-1,tE:t02<.5?1:0,tEnt:tEnt2,tEx:rt2?rt2.tEx:.5,
+          stp:k=>OS&&k<OS.st.length?{p:[OS.st[k].e,OS.st[k].n],d:[OS.st[k].dx,OS.st[k].dy]}:{p:pos2(tS(k),235),d:w2},
+          outP:k=>rt2&&rt2.out[k]?rt2.out[k]:[pos2(tS(k),235),pos2(tS(k),170),pos2(t02,170),pos2(t02,0)],inP:k=>rt2&&rt2.inn[k]?rt2.inn[k]:[pos2(.5,0),pos2(.5,170),pos2(tS(k),170),pos2(tS(k),235)]}},
+        ctxAt=t=>{if(i)return mkCtx(Ly);let st=null;try{st=rwyAt(hub,t)}catch(e){}if(!st||(Ly.act&&st.i===Ly.act.i&&st.sg===Ly.act.sg))return mkCtx(Ly);const L2=incLayOf(hub,st);return L2?mkCtx(L2):mkCtx(Ly)};let hold=0;
+        FL.forEach(f=>{const c=f.col,tp=(n-f.real)/1000,td=f.arr-240000;const dep=n>=f.real-1000&&n<f.real+380000,cx=ctxAt(dep?f.real:td-60000),{pos,u,L,t0,dT,tE,tEnt,tEx,stp,outP,inP}=cx;
           if(n>=f.arr&&n<f.real&&f.st>=0){{const sp2=stp(f.st);g+=ac(sp2.p[0],sp2.p[1],sp2.d[0],sp2.d[1],c,1,1,f.id,f.len)}}
           else if(n>=f.real&&n<f.real+240000&&f.st>=0){const q2=incPathM(outP(f.st),(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+240000&&n<f.real+285000){const fr=Math.pow((n-f.real-240000)/45000,1.8),q2=incPathM([pos(tEnt,0),pos(tE,0)],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
