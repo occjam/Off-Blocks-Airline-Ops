@@ -55,7 +55,7 @@ button{min-height:34px}
 [data-theme=light] .ov{background:var(--bg)}[data-theme=light] .warn{background:#fff6e0;color:#7a5410}
 .empty{text-align:center;padding:22px 12px;color:var(--mut)}.empty b{display:block;color:var(--tx);font-size:15px;margin-bottom:4px}
 .nav .ni{position:relative}.dot{position:absolute;top:2px;right:calc(50% - 20px);background:var(--red);color:#fff;border-radius:9px;font:700 10px system-ui;min-width:16px;padding:1px 4px;text-align:center}
-</style><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f9f8a"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="icon" href="icons/icon-192.png"></head><body><div id="app">
+</style></head><body><div id="app">
 <div class="hud"><div class="top"><h1>Off Blocks</h1><span class="mut">v0.9 · real-time <button id="mus_q" title="Music" style="margin-left:6px;padding:2px 9px;opacity:.45">♪</button><button data-t="settings" title="Settings" style="margin-left:6px;padding:2px 9px">⚙</button></span></div><div class="stats"><div><small>Cash</small><b id="cash"></b></div><div><small>UTC time</small><b id="clock"></b></div><div><small>Fleet / airborne</small><b id="fc"></b></div></div><div id="ipc" style="display:none"></div>
 </div>
 <div id="view"></div></div><nav class="nav" id="tabs"></nav><div id="toast" class="toast" style="display:none"></div>
@@ -2549,7 +2549,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-inc]');if(
 /* real gates, taxiways, aprons and terminals from OpenStreetMap (fetched once per airport in the browser, then cached) */
 const OSMC={};
 function incOsm(hub){let o=OSMC[hub];if(o)return o.ok?o:(o.err&&Date.now()-o.err>90000?(o.err=0,incOsmFetch(hub),null):null);o=OSMC[hub]={ok:0};
-  try{const j=localStorage.getItem('ob-osm2-'+hub);if(j){incOsmBuild(hub,JSON.parse(j));return o.ok?o:null}}catch(e){}incOsmFetch(hub);return null}
+  try{const j=localStorage.getItem('ob-osm3-'+hub);if(j){incOsmBuild(hub,JSON.parse(j));return o.ok?o:null}}catch(e){}incOsmFetch(hub);return null}
 async function incOsmFetch(hub){const A=AP[hub],d=.032,cl=Math.cos(A.lat*Math.PI/180),dl=d/cl,b=[A.lat-d,A.lon-dl,A.lat+d,A.lon+dl].map(v=>v.toFixed(5)).join(','),
     q='[out:json][timeout:50];(way["aeroway"~"^(taxiway|taxilane|apron|terminal)$"]('+b+');way["building"="terminal"]('+b+');node["aeroway"~"^(parking_position|gate)$"]('+b+');way["aeroway"="parking_position"]('+b+'););out geom qt;';OSMC[hub].busy=1;let why='';
   for(const ep of['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter']){try{const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),50000);const r=await fetch(ep+'?data='+encodeURIComponent(q),{signal:ac.signal});clearTimeout(tm);if(!r.ok){why='server '+r.status;continue}const j=await r.json();incOsmBuild(hub,j,1);if(!OSMC[hub].ok){OSMC[hub].why='no gate data for this airport in OpenStreetMap';OSMC[hub].err=Date.now()}return}catch(e){why=e&&e.name==='AbortError'?'timed out':(e&&e.message==='Failed to fetch'?'download blocked':String(e&&e.message||e).slice(0,40))}}
@@ -2560,11 +2560,18 @@ function incDij(G,src){const n=G.V.length,dist=new Float64Array(n).fill(1e18),pr
   const push=x=>{h.push(x);let i=h.length-1;while(i>0){const p=(i-1)>>1;if(h[p][0]<=h[i][0])break;[h[p],h[i]]=[h[i],h[p]];i=p}},pop=()=>{const t=h[0],l=h.pop();if(h.length){h[0]=l;let i=0;for(;;){const a=2*i+1,b=a+1;let m=i;if(a<h.length&&h[a][0]<h[m][0])m=a;if(b<h.length&&h[b][0]<h[m][0])m=b;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m}}return t};
   while(h.length){const [d,u]=pop();if(d>dist[u])continue;for(const [v,w] of G.adj[u]){const nd=d+w;if(nd<dist[v]){dist[v]=nd;pr[v]=u;push([nd,v])}}}return{dist,pr}}
 function incOsmBuild(hub,j,save){const A=AP[hub],cl=Math.cos(A.lat*Math.PI/180),M=(la,lo)=>[Math.round((lo-A.lon)*111320*cl),Math.round((la-A.lat)*111320)];let D;
-  if(j.elements){D={tw:[],ap:[],tm:[],st:[]};j.elements.forEach(e=>{const t=e.tags||{},a=t.aeroway;if(e.type==='node')D.st.push(M(e.lat,e.lon));else if(e.type==='way'&&e.geometry){const pts=e.geometry.map(g=>M(g.lat,g.lon));
-      if(a==='taxiway'||a==='taxilane')D.tw.push(pts);else if(a==='apron')D.ap.push(pts);else if(a==='terminal'||t.building==='terminal')D.tm.push(pts);else if(a==='parking_position'){const c=pts.reduce((q,p)=>[q[0]+p[0],q[1]+p[1]],[0,0]);D.st.push([Math.round(c[0]/pts.length),Math.round(c[1]/pts.length)])}}});
-    if(save){try{const x=JSON.stringify(D);if(x.length<700000)localStorage.setItem('ob-osm2-'+hub,x)}catch(e){}}}else D=j;
-  const tv=[];D.tm.forEach(p=>p.forEach(v=>tv.push(v)));const av=[];D.ap.forEach(p=>p.forEach(v=>av.push(v)));const ref=tv.length?tv:av.length?av:[[0,0]];
-  const st=[];D.st.forEach(p=>{if(Math.hypot(p[0],p[1])<2600&&!st.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<30)){let bd=1e18,bv=ref[0];ref.forEach(v=>{const d=Math.hypot(v[0]-p[0],v[1]-p[1]);if(d<bd){bd=d;bv=v}});const m=bd||1;st.push({e:p[0],n:p[1],d:bd,dx:(bv[0]-p[0])/m,dy:(bv[1]-p[1])/m})}});
+  if(j.elements){D={tw:[],ap:[],tm:[],st:[],bap:[],bt:[]};const BAD=/cargo|freight|general aviation|\bga\b|military|hangar|maint|\bfbo\b|private|fuel|helicopter|heli|\bvip\b|executive|\bmro\b|air force|national guard|coast guard|police|fedex|ups\b|dhl|atlas|amazon|cargolux|lan cargo|aeroexpress/i;
+    j.elements.forEach(e=>{const t=e.tags||{},a=t.aeroway,txt=[t.name,t.ref,t.description,t.operator,t.note,t.use,t['aeroway:use'],t.landuse,t.military,t.access].filter(Boolean).join(' '),bad=BAD.test(txt)||t.military||t.access==='private'||t.access==='no';
+      if(e.type==='node'){if(!bad)D.st.push(M(e.lat,e.lon))}
+      else if(e.type==='way'&&e.geometry){const pts=e.geometry.map(g=>M(g.lat,g.lon));
+        if(a==='taxiway'||a==='taxilane')D.tw.push(pts);else if(a==='apron'){D.ap.push(pts);if(bad)D.bap.push(pts)}else if(a==='terminal'||t.building==='terminal'){if(bad)D.bt.push(pts);else D.tm.push(pts)}
+        else if(a==='parking_position'&&!bad){const c=pts.reduce((q,p)=>[q[0]+p[0],q[1]+p[1]],[0,0]);D.st.push([Math.round(c[0]/pts.length),Math.round(c[1]/pts.length)])}}});
+    if(save){try{const x=JSON.stringify(D);if(x.length<700000)localStorage.setItem('ob-osm3-'+hub,x)}catch(e){}}}else D=j;
+  const sg=L=>{const o=[];L.forEach(p=>{for(let i=1;i<p.length;i++)o.push([p[i-1],p[i]]);if(p.length>2)o.push([p[p.length-1],p[0]])});return o},tv=sg(D.tm),bv=sg(D.bt||[]),refS=tv.length?tv:sg(D.ap).length?sg(D.ap):[[[0,0],[0,1]]];
+  const inP=(p,poly)=>{let c=false;for(let i=0,k=poly.length-1;i<poly.length;k=i++){const a=poly[i],b=poly[k];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
+  const nsd=(p,S)=>{let m=1e18,q=null;S.forEach(([a,b])=>{const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1;let t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));const x=a[0]+dx*t,y=a[1]+dy*t,d=Math.hypot(x-p[0],y-p[1]);if(d<m){m=d;q=[x,y]}});return{d:m,q}};
+  let all=[];D.st.forEach(p=>{if(Math.hypot(p[0],p[1])<2600&&!all.some(q=>Math.hypot(q.e-p[0],q.n-p[1])<30)){if((D.bap||[]).some(poly=>inP(p,poly))||(D.bt||[]).some(poly=>inP(p,poly)))return;const r=nsd(p,refS);if(bv.length&&tv.length&&nsd(p,bv).d<Math.min(r.d,60)+1e-9&&nsd(p,bv).d<r.d)return;const m=r.d||1;all.push({e:p[0],n:p[1],d:r.d,dx:(r.q[0]-p[0])/m,dy:(r.q[1]-p[1])/m})}});
+  let st=all;if(tv.length){for(const lim of[400,650,1000]){const f=all.filter(x=>x.d<=lim);st=f;if(f.length>=4)break}}
   st.sort((a,b)=>a.d-b.d);st.length=Math.min(st.length,40);const G=incGraph(D),o=OSMC[hub]||(OSMC[hub]={});Object.assign(o,{D,st,G,rt:{},ok:st.length>=3&&G.V.length>=10?1:0,err:0});delete INC_FL[hub];try{tileRedraw()}catch(e){}}
 function incNearV(G,p,md){let bd=md*md,bi=-1;for(let i=0;i<G.V.length;i++){const d=(G.V[i][0]-p[0])**2+(G.V[i][1]-p[1])**2;if(d<bd){bd=d;bi=i}}return bi}
 function incRoute(hub,Ly){const o=OSMC[hub];if(!o||!o.ok)return null;const key=Ly.t0;if(o.rt[key]!==undefined)return o.rt[key];const {A,u,L,t0,w}=Ly,G=o.G,nv=[-u[1],u[0]],pr=G.V.map(v=>{const dx=v[0]-A[0],dy=v[1]-A[1];return[(dx*u[0]+dy*u[1])/L,Math.abs(dx*nv[0]+dy*nv[1])]});
