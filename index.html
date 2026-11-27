@@ -288,11 +288,11 @@ function wxLoad(){try{if(!WX.g){const c=JSON.parse(localStorage.getItem('wxg')||
 function wxSevOf(c){let s=0,tx='';const w=c.weather_code,g=c.wind_gusts_10m||0,v=c.visibility;
   if(w>=95){s=3;tx='Thunderstorm'}else if(w===45||w===48||(v!=null&&v<1000)){s=2;tx=v!=null&&v<1000?'Low visibility':'Fog'}else if([65,67,75,77,82,85,86].includes(w)){s=2;tx=w>=71?'Heavy snow':'Heavy rain'}else if([63,73,81,55,57,66].includes(w)){s=1;tx=w>=71?'Snow':'Rain'}
   if(g>=40&&s<3){s=Math.max(s,3-(g<48?1:0));tx=(tx?tx+', ':'')+'strong gusts'}else if(g>=30&&s<2){s=Math.max(s,1);tx=(tx?tx+', ':'')+'gusty'}
-  return{s,tx:tx||'Fair',g:Math.round(g),v:v!=null?Math.round(v/100)/10:null,w}}
+  return{s,tx:tx||'Fair',g:Math.round(g),v:v!=null?Math.round(v/100)/10:null,w,wd:c.wind_direction_10m!=null?c.wind_direction_10m:null,ws:c.wind_speed_10m!=null?c.wind_speed_10m:null}}
 function wxApLoad(){if(typeof AP==='undefined'||!S||!S.base)return;if(WX.apt&&Date.now()-WX.apt<30*60000)return;if(WX.atried&&Date.now()-WX.atried<10*60000)return;WX.atried=Date.now();
   const cs=new Set([S.base,...(S.hubs||[])]);(S.routes||[]).forEach(r=>{cs.add(r.o);cs.add(r.d)});if(typeof AIC!=='undefined'&&AIC)AIC.forEach(c=>{if(!c.dead)c.hubs.forEach(h=>cs.add(h))});
   const L=[...cs].filter(c=>AP[c]),ch=[];for(let i=0;i<L.length;i+=90)ch.push(L.slice(i,i+90));
-  Promise.all(ch.map(c=>fetch('https://api.open-meteo.com/v1/forecast?latitude='+c.map(k=>AP[k].lat.toFixed(2)).join(',')+'&longitude='+c.map(k=>AP[k].lon.toFixed(2)).join(',')+'&current=weather_code,wind_gusts_10m,visibility&wind_speed_unit=kn').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(j=>({c,j:Array.isArray(j)?j:[j]})))).then(rs=>{
+  Promise.all(ch.map(c=>fetch('https://api.open-meteo.com/v1/forecast?latitude='+c.map(k=>AP[k].lat.toFixed(2)).join(',')+'&longitude='+c.map(k=>AP[k].lon.toFixed(2)).join(',')+'&current=weather_code,wind_gusts_10m,visibility,wind_speed_10m,wind_direction_10m&wind_speed_unit=kn').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(j=>({c,j:Array.isArray(j)?j:[j]})))).then(rs=>{
     rs.forEach(({c,j})=>c.forEach((k,i)=>{if(j[i]&&j[i].current)WX.ap[k]=wxSevOf(j[i].current)}));WX.apt=Date.now();WX.aerr=''}).catch(e=>{WX.aerr=String(e&&e.message||e)})}
 const wxSev=k=>Math.max((WX.ap[k]&&WX.ap[k].s)||0,typeof evSev==='function'?evSev(k,now()):0);
 const wxLine=k=>{const a=WX.ap[k];return a?'<div class="mut">Weather: <b style="color:'+(a.s>=3?'#f87171':a.s>=2?'#fbbf24':'inherit')+'">'+a.tx+'</b>'+(a.g>=20?' · gusts '+a.g+' kt':'')+(a.v!=null&&a.v<10?' · visibility '+a.v+' km':'')+'</div>':''};
@@ -313,6 +313,13 @@ function wxOps(dst,t,arr,id,pax){const tn=now(),live=Math.abs(arr-tn)<3*36e5;let
   const pd=s>=3?.22:s>=1.8?.05:0;
   if(pd&&r3<pd){const al=wxAlt(dst,arr);if(al){o.div=al;o.hold=Math.max(o.hold,25);}}
   return o}
+
+/* surface wind and the runway in use: live airport wind when we have it, otherwise a deterministic model (trades in the tropics, westerlies in mid-latitudes) that changes every 3 hours */
+function apWind(k,tms){const a=WX.ap&&WX.ap[k];if(a&&a.wd!=null&&a.ws!=null&&WX.apt&&Math.abs(tms-now())<2*36e5)return{d:a.wd,s:a.ws,live:1};const A=AP[k];if(!A)return null;const R=rng(hs(k+'w'+Math.floor(tms/10800000))),r1=R(),r2=R(),al=Math.abs(A.lat);
+  const base=al<28?(A.lat>=0?75:115):al<62?(A.lat>=0?265:285):320;return{d:Math.round(((base+(r1-.5)*110+360)%360)/10)*10,s:Math.round(4+r2*10),live:0}}
+function rwyActive(k,tms,Rs){const R=Rs||(typeof RWY!=='undefined'&&RWY[k]);if(!R||!R.length)return null;const w=apWind(k,tms)||{d:0,s:0},L0=Math.hypot(R[0][2]-R[0][0],R[0][3]-R[0][1])||1;let best=null;
+  R.forEach((r,i)=>{const hx=r[2]-r[0],hy=r[3]-r[1],l=Math.hypot(hx,hy);if(l<L0*.6)return;[1,-1].forEach(sg=>{const ux=hx/l*sg,uy=hy/l*sg,hdg=(Math.atan2(ux,uy)*180/Math.PI+360)%360,hw=Math.cos((hdg-w.d)*Math.PI/180)*Math.max(w.s,3),sc=hw+(l/L0)*2;if(!best||sc>best.sc)best={i,r,sg,u:[ux,uy],hdg,hw,sc,w,id:(sg>0?r[5]:r[6])||''}})});return best}
+function rwyLine(k){try{const b=rwyActive(k,now());if(!b)return'';return'<div class="mut">Runway in use <b style="color:var(--tx)">'+(b.id||Math.round(b.hdg/10))+'</b> · wind '+String(Math.round(b.w.d)).padStart(3,'0')+'° '+Math.round(b.w.s)+' kt ('+(b.w.live?'live':'model')+') · headwind '+Math.max(0,Math.round(b.hw))+' kt</div>'}catch(e){return''}}
 
 const LIV=['#2dd4bf','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#34d399','#f472b6','#0ea5a4','#1d4ed8','#b91c1c','#334155'];
 const LIV2=['#ffffff','#0f172a','#fbbf24','#2dd4bf','#f87171','#a3e635'];
@@ -1103,8 +1110,7 @@ function evAct(){const n=Math.floor(now()/1000);if(EVA.t===n)return EVA.L;EVA.t=
 /* ---- smart routes: leave and join along the real runway heading, a small per-pair wind/airway offset, bent around conflict zones and active storms ---- */
 const NOFLY=[[49,32,520],[53,28,260],[32.5,53.5,650],[33.5,43.5,480],[35,38,260],[33.5,66,520],[15.5,47.5,320],[5,46,340],[40,127,160],[15,31,300],[28,17,380]];
 function llOff(p,e,n){const cl=Math.cos(p[0]*RAD)||1e-6;return[p[0]+n/111.2,p[1]+e/(111.2*cl)]}
-function rwDir(ap,tx,ty,mode){let R;try{R=typeof RWY!=='undefined'&&RWY[ap.iata]}catch(e){}if(!R||!R.length)return null;const r=R[0],hx=r[2]-r[0],hy=r[3]-r[1],l=Math.hypot(hx,hy)||1,u=[hx/l,hy/l],v=[-u[0],-u[1]];
-  const sc=h=>mode===0?h[0]*tx+h[1]*ty:-(h[0]*tx+h[1]*ty);return sc(u)>=sc(v)?u:v}
+function rwDir(ap){try{const b=rwyActive(ap.iata,now());return b?b.u:null}catch(e){return null}}
 function pushOut(la,lo,w,L){for(const z of L){const R=z[2],cl=Math.cos(z[0]*RAD),dx=((lo-z[1]+540)%360-180)*111.2*cl,dy=(la-z[0])*111.2,dist=Math.hypot(dx,dy);if(dist>=R)continue;const k=dist<1e-3?[0,1]:[dx/dist,dy/dist],tx=dx+(k[0]*R-dx)*w,ty=dy+(k[1]*R-dy)*w;lo=z[1]+tx/(111.2*cl);la=z[0]+ty/111.2}return[la,lo]}
 const RTC=new Map();
 function routeBuild(o,d){const km=gcKm(o,d);if(km<120)return null;
@@ -1114,14 +1120,14 @@ function routeBuild(o,d){const km=gcKm(o,d);if(km<120)return null;
   for(let i=0;i<=N;i++){const f=i/N;if(f<fd||f>1-fa)continue;let p=gcPt(o,d,f);const q=gcPt(o,d,Math.min(1,f+.01)),cl=Math.cos(p[0]*RAD),tx=((q[1]-p[1]+540)%360-180)*cl,ty=q[0]-p[0],tl=Math.hypot(tx,ty)||1,off=bulge*Math.sin(Math.PI*f);
     p=llOff(p,-ty/tl*off,tx/tl*off);const w=Math.min(1,Math.min(f,1-f)/.12);p=pushOut(p[0],p[1],w,zones);M.push(p)}
   const A=[o.lat,o.lon],B=[d.lat,d.lon],p1=gcPt(o,d,.03),p2=gcPt(o,d,.97),cA=Math.cos(o.lat*RAD),cB=Math.cos(d.lat*RAD);
-  const dd=rwDir(o,((p1[1]-o.lon+540)%360-180)*cA,p1[0]-o.lat,0),da=rwDir(d,((p2[1]-d.lon+540)%360-180)*cB,p2[0]-d.lat,1);
+  const dd=rwDir(o),da=rwDir(d);
   let P=[A];if(dd){P.push(llOff(A,dd[0]*14,dd[1]*14),llOff(A,dd[0]*34,dd[1]*34))}
   P=P.concat(M);if(da){P.push(llOff(B,-da[0]*34,-da[1]*34),llOff(B,-da[0]*14,-da[1]*14))}P.push(B);
   for(let i=1;i<P.length;i++){let dl=P[i][1]-P[i-1][1];while(dl>180){P[i]=[P[i][0],P[i][1]-360];dl-=360}while(dl<-180){P[i]=[P[i][0],P[i][1]+360];dl+=360}}
   for(let it=0;it<2;it++){const Q=[P[0]];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1];Q.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75])}Q.push(P[P.length-1]);P=Q}
   const cum=[0];for(let i=1;i<P.length;i++){const cl=Math.cos((P[i][0]+P[i-1][0])/2*RAD);cum.push(cum[i-1]+Math.hypot((P[i][1]-P[i-1][1])*cl,P[i][0]-P[i-1][0])*111.2)}
   return{P,cum,tot:cum[cum.length-1]||1}}
-function routeGet(o,d){const key=o.iata+'>'+d.iata+'|'+evAct().map(e=>e.id).join(',');let r=RTC.get(key);if(r===undefined){r=routeBuild(o,d);RTC.set(key,r);if(RTC.size>600)RTC.delete(RTC.keys().next().value)}return r}
+function routeGet(o,d){const key=o.iata+'>'+d.iata+'|'+Math.floor(now()/10800000)+'|'+evAct().map(e=>e.id).join(',');let r=RTC.get(key);if(r===undefined){r=routeBuild(o,d);RTC.set(key,r);if(RTC.size>600)RTC.delete(RTC.keys().next().value)}return r}
 function gcPtD(o,d,f){const R=routeGet(o,d);if(!R)return gcPt(o,d,f);f=Math.max(0,Math.min(1,f));const s=f*R.tot,C=R.cum;let lo=0,hi=C.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(C[m]<=s)lo=m;else hi=m}const sg=C[hi]-C[lo]||1,u=(s-C[lo])/sg,a=R.P[lo],b=R.P[hi];let lon=a[1]+(b[1]-a[1])*u;lon=((lon+540)%360+360)%360-180;return[a[0]+(b[0]-a[0])*u,lon]}
 function routeLine(o,d,n){let s='',pl=null;n=n||80;for(let i=0;i<=n;i++){const p=gcPtD(o,d,i/n),q=P(p[1],p[0]);const brk=!q[2]||(MS.proj==='flat'&&pl!==null&&Math.abs(p[1]-pl)>180);s+=(brk||i===0?'M':'L')+q[0].toFixed(1)+' '+q[1].toFixed(1);pl=p[1]}return s}
 function gcPath(a,b){let s='',pl=null;for(let i=0;i<=48;i++){const p=gcPt(a,b,i/48),X=mx(p[1]),Y=my(p[0]);s+=(pl===null||Math.abs(p[1]-pl)>180?'M':'L')+X.toFixed(1)+' '+Y.toFixed(1);pl=p[1]}return s}
@@ -1262,7 +1268,7 @@ function mapInfo0(){const el=$('#minfo');if(!el)return;MPREV=null;
     el.innerHTML=card('<div class="row"><b>'+a.f.reg+' · '+a.t[1]+'</b><span class="mut">'+o.iata+' → '+d.iata+'</span></div><div class="mut" style="margin-top:4px">'+o.city+' to '+d.city+'</div>'+mapFS(o,d,a.p,a.t,a.arr)+holdTxt(a.h,a.p,d.iata));return}
   const k=MSEL.ap,Pp=AP[k];if(!Pp){el.innerHTML='';return}const base=S.base,isBase=k===base,hub=(S.hubs||[]).includes(k);
   let h='<div class="row"><b>'+Pp.iata+' · '+Pp.city+'</b><span class="mut">'+Pp.cc+(hub?' · your hub':'')+'</span></div>';
-  h+='<div class="mut" style="margin-top:4px">Runway grade '+Pp.grade+' · population '+(Pp.pop>=1e6?(Pp.pop/1e6).toFixed(1)+'M':Math.round(Pp.pop/1e3)+'k')+'</div>'+wxLine(k);
+  h+='<div class="mut" style="margin-top:4px">Runway grade '+Pp.grade+' · population '+(Pp.pop>=1e6?(Pp.pop/1e6).toFixed(1)+'M':Math.round(Pp.pop/1e3)+'k')+'</div>'+wxLine(k)+(typeof rwyLine==='function'?rwyLine(k):'');
   if(!isBase&&base&&AP[base]){const d=nm(base,k),pr=PAIR[base+'|'+k];MPREV=[base,k];
     if(d!=null&&pr){const rf=refFare(d,base,k),rt=hasRights(k),tr=trOk(base,k);
       h+='<div style="margin-top:6px">'+base+' → '+k+': <b>'+d.toLocaleString()+' nm</b> · demand ~<b>'+pr[3]+'</b> pax/day · ref fare <b>$'+rf+'</b></div>';
@@ -2658,9 +2664,10 @@ function incNSe(hub){const o=OSMC[hub],ns=incNS(hub);return o&&o.ok?Math.min(ns,
 function incNRe(hub){const o=OSMC[hub],nr=incNR(hub);return o&&o.ok?Math.min(nr,Math.max(0,o.st.length-incNSe(hub))):nr}
 /* real-scale airfield on the map: real runways from OurAirports, taxiways/apron/stands laid out from them */
 const INC_LY={},INC_FL={};let MGA=[];
-function incLay(hub){if(INC_LY[hub]!==undefined)return INC_LY[hub];const R=typeof RWY!=='undefined'&&RWY[hub];if(!R||!R.length)return INC_LY[hub]=null;
+function incLay(hub){const blk=Math.floor(now()/10800000),c0=INC_LY[hub];if(c0&&c0.blk===blk)return c0.v;const v=incLay0(hub);INC_LY[hub]={blk,v};return v}
+function incLay0(hub){let R=typeof RWY!=='undefined'&&RWY[hub];if(!R||!R.length)return null;const ac=rwyActive(hub,now(),R);if(ac)R=[R[ac.i]].concat(R.filter((x,j)=>j!==ac.i));
   const r=R[0],A=[r[0],r[1]],B=[r[2],r[3]],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy),u=[dx/L,dy/L],v=[-u[1],u[0]],d=-(A[0]*v[0]+A[1]*v[1]),side=Math.abs(d)>60?(d>0?1:-1):(hs('sd'+hub)%2?1:-1);
-  return INC_LY[hub]={R,A,B,L,u,w:[v[0]*side,v[1]*side],t0:hs('dr'+hub+dayIdx(now()))%2?.04:.96}}
+  return{R,A,B,L,u,w:[v[0]*side,v[1]*side],t0:ac?(ac.sg>0?.04:.96):(hs('dr'+hub+dayIdx(now()))%2?.04:.96),act:ac}}
 const INL={Regional:30,Narrow:38,Mid:56,Wide:66,A388:73,B748:71,B744:70,A346:75,B77W:74,A359:67,B789:63,B788:57,A333:64,A332:59,B763:55,B772:64,E190:36,E170:30,E175:32,AT76:27,DH8D:33,CRJ9:36,CRJ7:32,CRJ2:27,A21N:44,A321:44,B739:42,B38M:39,B737:34,A319:34,A19N:34,B752:47,B753:55};
 function incLen(t){return t?INL[t[0]]||INL[t[2]]||38:38}
 function incCol(name){try{const c=AIC.find(x=>x.name===name);return c?aiColC(c):'#cbd5e1'}catch(e){return'#cbd5e1'}}
