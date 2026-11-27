@@ -2787,7 +2787,7 @@ async function radLoad(){if(RADR.busy||Date.now()-RADR.at<300000)return;RADR.bus
     if(RADR.path!==l.path){RADR.host=j.host||'https://tilecache.rainviewer.com';RADR.path=l.path;RADR.t=l.time*1000;for(const k of[...TILE.c.keys()])if(k.startsWith('rad'))TILE.c.delete(k);TILE.rerr=0}RADR.err='';RADR.at=Date.now()}catch(e){RADR.err=e&&e.name==='AbortError'?'timed out':'unavailable'}RADR.busy=0;try{tileRedraw()}catch(e){}}
 const TILE={c:new Map(),u:{esri:(z,x,y)=>'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x,osm:(z,x,y)=>'https://'+'abcd'[(x+y)%4]+'.basemaps.cartocdn.com/dark_all/'+z+'/'+x+'/'+y+'@2x.png',rad:(z,x,y)=>RADR.host+RADR.path+'/256/'+z+'/'+x+'/'+y+'/2/1_1.png'},at:{esri:'© Esri, Maxar, Earthstar Geographics',osm:'© OpenStreetMap contributors © CARTO',rad:''},mx:{esri:19,osm:20,rad:7},q:0,err:0,ok:0};
 function tileGet(st,z,x,y,load){const key=st+z+'/'+x+'/'+y;let t=TILE.c.get(key);if(t&&t.err&&load&&Date.now()-t.at>12000){TILE.c.delete(key);t=null}if(t){TILE.c.delete(key);TILE.c.set(key,t);return t}if(!load)return null;
-  t={ok:0,at:Date.now(),im:new Image()};t.im.onload=()=>{t.ok=1;TILE.ok++;tileRedraw()};t.im.onerror=()=>{t.err=1;t.at=Date.now();TILE.err++};t.im.src=TILE.u[st](z,x,y);TILE.c.set(key,t);if(TILE.c.size>500)TILE.c.delete(TILE.c.keys().next().value);return t}
+  t={ok:0,at:Date.now(),im:new Image()};const u0=TILE.u[st](z,x,y);t.im.crossOrigin='anonymous';t.im.onload=()=>{t.ok=1;TILE.ok++;tileRedraw()};t.im.onerror=()=>{if(!t.nc){t.nc=1;t.im.crossOrigin=null;t.im.src=u0;return}t.err=1;t.at=Date.now();TILE.err++};t.im.src=u0;TILE.c.set(key,t);if(TILE.c.size>500)TILE.c.delete(TILE.c.keys().next().value);return t}
 function tileRedraw(){if(TILE.q)return;TILE.q=1;requestAnimationFrame(()=>{TILE.q=0;try{mapUpdate()}catch(e){}})}
 function tileLat(y,n){return Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI}
 function tileLayer(g,W,H,st,o){o=o||{};const k=MS.k;if(k<(o.kMin||30))return;let z=Math.round(Math.log2(k*360/400));z=Math.max(o.zMin||4,Math.min(TILE.mx[st],z));const n=Math.pow(2,z),lo0=MS.cx-W/2/k,lo1=MS.cx+W/2/k,laT=Math.min(84,MS.cy+H/2/k),laB=Math.max(-84,MS.cy-H/2/k),
@@ -2960,6 +2960,9 @@ function ntfCard(){if(typeof Notification==='undefined')return'<div class="mut" 
 document.addEventListener('click',e=>{if(e.target.id!=='ntf_t')return;if(S.ntf){S.ntf=0;save();render();return}
   if(typeof Notification==='undefined')return;const on=()=>{S.ntf=1;save();render();ntfShow('Notifications are on.')};
   if(Notification.permission==='granted')on();else if(Notification.permission==='denied')toast('Blocked in browser settings',1);else Notification.requestPermission().then(p=>{if(p==='granted')on();else{toast('Permission not granted',1);render()}}).catch(()=>toast('Notifications unavailable here',1))});
+
+/* offline shell + map tile cache (only on the GitHub Pages / local copy, not inside the Claude artifact frame) */
+try{if('serviceWorker' in navigator&&/(github\.io|localhost|127\.0\.0\.1)$/.test(location.hostname))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}catch(e){}
 /* ---------- order details and show-on-map ---------- */
 const ordMf=t=>{const m=t[1].match(/^(De Havilland Canada|De Havilland|Airbus|Boeing|Embraer|Bombardier|ATR|Saab|Fokker|McDonnell Douglas|BAe|British Aerospace|Cessna|COMAC|Sukhoi|Tupolev|Antonov|Mitsubishi|Dornier|Beechcraft)/i);return m?m[1]:t[1].split(' ')[0]};
 const ordDt=ms=>{const d=new Date(ms),M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return d.getUTCDate()+' '+M[d.getUTCMonth()]+' '+String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')+' UTC'};
