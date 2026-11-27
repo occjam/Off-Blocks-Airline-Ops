@@ -1180,7 +1180,7 @@ function mapQuick(){if(MS.proj==='globe'){MQ=.55;clearTimeout(MQT);MQT=setTimeou
 function apVis(A,k,ke){if(A.tier===1)return 1;if(MSEL&&MSEL.ap===k)return 1;if(A.tier===2)return ke>=1.6||MHUB.has(k);return ke>=4.5||MHUB.has(k)}
 let MHUB=new Set(),MDL=[];
 function mapTap(cx,cy){const [x,y]=mapAt(cx,cy);let best=null,bd=22;
-  if(typeof MGA!=='undefined'&&MGA.length){let gb=null,gd=34;MGA.forEach(g=>{const d=Math.hypot(g.X-x,g.Y-y);if(d<gd){gd=d;gb=g}});if(gb){GH=gb.hub;GNX=gb.id;MSEL=null;mapInfo();AO(gnFlightCard(gb.id));return}}
+  if(typeof MGA!=='undefined'&&MGA.length){let gb=null,gd=34;MGA.forEach(g=>{const d=Math.hypot(g.X-x,g.Y-y);if(d<gd){gd=d;gb=g}});if(gb){MSEL=null;mapInfo();if(String(gb.id)[0]==='x'){AO(incInfo(gb));return}GH=gb.hub;GNX=gb.id;AO(gnFlightCard(gb.id));return}}
   (MFL||[]).forEach(a=>{const d=Math.hypot(a.X-x,a.Y-y);if(d<bd){bd=d;best={fl:a}}});
   if(!best){bd=20;(MDL||[]).forEach(r=>{const d=Math.hypot(r.X-x,r.Y-y);if(d<bd){bd=d;best={dl:r.k}}})}
   if(!best){bd=16;(RFL||[]).forEach(r=>{const d=Math.hypot(r.X-x,r.Y-y);if(d<bd){bd=d;best={rv:r.a.key}}})}
@@ -2551,8 +2551,16 @@ function incLay(hub){if(INC_LY[hub]!==undefined)return INC_LY[hub];const R=typeo
 const INL={Regional:30,Narrow:38,Mid:56,Wide:66,A388:73,B748:71,B744:70,A346:75,B77W:74,A359:67,B789:63,B788:57,A333:64,A332:59,B763:55,B772:64,E190:36,E170:30,E175:32,AT76:27,DH8D:33,CRJ9:36,CRJ7:32,CRJ2:27,A21N:44,A321:44,B739:42,B38M:39,B737:34,A319:34,A19N:34,B752:47,B753:55};
 function incLen(t){return t?INL[t[0]]||INL[t[2]]||38:38}
 function incCol(name){try{const c=AIC.find(x=>x.name===name);return c?aiColC(c):'#cbd5e1'}catch(e){return'#cbd5e1'}}
-function incFl(hub,n){const k=Math.floor(n/15000),c=INC_FL[hub];if(c&&c.k===k)return c.L;const B=gnBoard(hub,n),TN=60*MIN,cf=gnCfg(hub),NS=Math.max(4,Math.min(14,cf.st|0)),L=B.L.filter(x=>!x.cx).map(x=>({id:x.id,own:x.own,arr:x.dep-TN+x.ib*MIN,real:x.dep+x.tot*MIN,len:incLen(x.t),col:x.own?(typeof acc==='function'?acc():'#2dd4bf'):incCol(x.who)})).sort((a,b)=>a.arr-b.arr),busy=Array(NS).fill(-1e18);
-  L.forEach(f=>{let s=hs(String(f.id))%NS,k2=0;while(k2<NS&&busy[s]>f.arr-6*MIN){s=(s+1)%NS;k2++}f.st=k2<NS?s:-1;if(f.st>=0)busy[f.st]=f.real+6*MIN});INC_FL[hub]={k,L};return L}
+function incNR(hub){const t=(AP[hub]&&AP[hub].tier)||3;return t===1?12:t===2?8:5}
+function incNS(hub){return(S.hubs||[]).includes(hub)?Math.max(4,Math.min(14,gnCfg(hub).st|0)):0}
+function incFl(hub,n){const k=Math.floor(n/15000),c=INC_FL[hub];if(c&&c.k===k)return c.L;const TN=60*MIN,isH=(S.hubs||[]).includes(hub),NS=incNS(hub),NR=incNR(hub),day=dayIdx(n);let L=[];
+  const alloc=(arr,off,N)=>{const busy=Array(N).fill(-1e18);arr.sort((a,b)=>a.arr-b.arr).forEach(f=>{let s=hs(String(f.id))%Math.max(1,N),k2=0;while(k2<N&&busy[s]>f.arr-6*MIN){s=(s+1)%N;k2++}f.st=k2<N?off+s:-1;if(f.st>=0)busy[f.st-off]=f.real+6*MIN})};
+  if(isH){const B=gnBoard(hub,n);L=B.L.filter(x=>!x.cx).map(x=>({id:x.id,own:x.own,who:x.who,to:x.to,tn:x.t&&x.t[1],dep:x.dep,arr:x.dep-TN+x.ib*MIN,real:x.dep+x.tot*MIN,len:incLen(x.t),col:x.own?(typeof acc==='function'?acc():'#2dd4bf'):incCol(x.who)}));alloc(L,0,NS)}
+  const o=[],con=isH?(gnS().c[hub]||{}):{};
+  try{if(typeof AIC!=='undefined'&&AIC)AIC.forEach(c=>{if(c.dead||(con[c.id]&&con[c.id].on))return;(c.rt||[]).forEach(r=>{if(r.o!==hub&&r.d!==hub)return;const t=TY[r.code];if(!t)return;const to=r.o===hub?r.d:r.o;for(let q=0;q<r.f;q++){const dep=dayStart(day)+Math.round(360+((q+.5)/r.f)*960)*MIN,ds=typeof aiDis==='function'?aiDis(c,r.o+r.d+q+(r.o===hub?0:1),day,to):{s:0,dm:0};if(ds.s===2)continue;const ib=ds.s===1?ds.dm:0;o.push({id:'x'+c.id+r.o+r.d+q+day,own:0,who:c.name,to,tn:t[1],dep,arr:dep-TN+ib*MIN,real:dep+ib*MIN,len:incLen(t),col:aiColC(c)})}})})}catch(e){}
+  alloc(o,NS,NR);L=L.concat(o);INC_FL[hub]={k,L};return L}
+function incInfo(g){const f=(INC_FL[g.hub]&&INC_FL[g.hub].L||[]).find(x=>x.id===g.id);if(!f)return'<div class="row"><b>Flight</b><button data-ac="x">Close</button></div>';const n=now();
+  return'<div class="row"><b>'+f.who+' to '+f.to+'</b><button data-ac="x">Close</button></div><div class="mut" style="font-size:12px;margin-top:4px">'+(f.tn||'')+' · scheduled '+hhmm(f.dep)+(f.real>f.dep?' · expected '+hhmm(f.real):'')+'</div><div class="card" style="margin-top:8px"><b>'+(n<f.arr?'Inbound':n<f.real?'On stand':'Departing')+'</b><div class="mut" style="font-size:12px;margin-top:3px">This airline handles its own flight at '+g.hub+'. Its aircraft use their own stands, not yours.</div></div>'}
 function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><pattern id="inch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="#e5484d"/></pattern></defs>';
   const DG=180/Math.PI;
   const cand=ke>=100?Object.keys(RWY).filter(k=>AP[k]):[];
@@ -2562,7 +2570,7 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
     const {R,A:a,B:b,L,u,w,t0}=Ly,isHub=hubs.includes(hub),i=isHub?incAct(hub,n):null,X=(e,nn)=>[q[0]+e*s,q[1]-nn*s],pos=(t,off)=>[a[0]+u[0]*t*L+w[0]*off,a[1]+u[1]*t*L+w[1]*off],PX=(t,off)=>{const p=pos(t,off),x=X(p[0],p[1]);return x[0].toFixed(1)+','+x[1].toFixed(1)};
     const poly=(pts,f,st,sw)=>'<polygon points="'+pts.map(p=>PX(p[0],p[1])).join(' ')+'" fill="'+f+'"'+(st?' stroke="'+st+'" stroke-width="'+(sw||1)+'"':'')+'/>',ln=(p1,p2,c,wm,minpx,extra)=>{const x1=X(...pos(p1[0],p1[1])),x2=X(...pos(p2[0],p2[1]));return'<line x1="'+x1[0].toFixed(1)+'" y1="'+x1[1].toFixed(1)+'" x2="'+x2[0].toFixed(1)+'" y2="'+x2[1].toFixed(1)+'" stroke="'+c+'" stroke-width="'+Math.max(minpx,wm*s).toFixed(1)+'"'+(extra||'')+'/>'};
     let g='<g style="pointer-events:none">';
-    const full=ke>=500,hl=Math.min(.28,520/L),NS=isHub?Math.max(4,Math.min(14,gnCfg(hub).st|0)):(A.tier===1?10:A.tier===2?7:4),sp=Math.min(60,2*hl*L/NS),tS=k=>.5+((k-(NS-1)/2)*sp)/L;
+    const full=ke>=500,hl=Math.min(.34,(Math.min(14,incNS(hub))+incNR(hub))*30/L+.04),NS=incNS(hub),NT=NS+incNR(hub),sp=Math.min(60,(2*hl*L-60)/NT),tS=k=>k<NS?.5+((k-(NS-1)/2)*sp)/L:.5+((k-NS)%2?1:-1)*((NS/2+.5+Math.floor((k-NS)/2))*sp)/L;
     if(full){g+=poly([[-.04,-300],[1.04,-300],[1.04,700],[-.04,700]],'rgba(120,135,150,.14)','rgba(160,175,190,.4)',1);
       g+=ln([.02,170],[.98,170],'#46515f',23,1.6);[t0,.5,1-t0].forEach(t=>{g+=ln([t,0],[t,170],'#46515f',23,1.6)});
       g+=poly([[.5-hl-.03,170],[.5+hl+.03,170],[.5+hl+.03,520],[.5-hl-.03,520]],'#2c3640','#46515f',1);
@@ -2576,9 +2584,9 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
     const ac=(e,nn,dx,dy,c,sc,op,id,len)=>{const p=X(e,nn);if(id)MGA.push({id,hub,X:p[0],Y:p[1]});const ang=Math.atan2(-dy,dx)*DG,lm=len||38,pl=Math.max(lm*s*(sc||1),minL*Math.sqrt(lm/38)*(sc||1))/21;return'<g transform="translate('+p[0].toFixed(1)+' '+p[1].toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+pl.toFixed(3)+')" fill="'+c+'" stroke="#06101a" stroke-width=".9" opacity="'+(op==null?1:op).toFixed(2)+'"><path d="'+PLANE+'"/></g>'};
     const path=(pts,f)=>{const m=pts.map(p=>pos(p[0],p[1])),cum=[0];for(let k=1;k<m.length;k++)cum.push(cum[k-1]+Math.hypot(m[k][0]-m[k-1][0],m[k][1]-m[k-1][1]));const tot=cum[cum.length-1],d=Math.max(0,Math.min(1,f))*tot;let k=1;while(k<m.length-1&&cum[k]<d)k++;const sg=cum[k]-cum[k-1]||1,r=(d-cum[k-1])/sg;return{e:m[k-1][0]+(m[k][0]-m[k-1][0])*r,n:m[k-1][1]+(m[k][1]-m[k-1][1])*r,dx:m[k][0]-m[k-1][0],dy:m[k][1]-m[k-1][1]}};
     if(ke>=2500&&full){
-      if(isHub){const FL=incFl(hub,n),dT=t0<.5?1:-1,tE=t0<.5?1:0;let hold=0;
+      {const FL=incFl(hub,n),dT=t0<.5?1:-1,tE=t0<.5?1:0;let hold=0;
         FL.forEach(f=>{const ts=f.st>=0?tS(f.st):.5,c=f.col,tp=(n-f.real)/1000,td=f.arr-240000;
-          if(n>=f.arr&&n<f.real){g+=ac(...(()=>{const p=pos(ts,235);return[p[0],p[1],w[0],w[1]]})(),c,1,1,f.id,f.len)}
+          if(n>=f.arr&&n<f.real&&f.st>=0){g+=ac(...(()=>{const p=pos(ts,235);return[p[0],p[1],w[0],w[1]]})(),c,1,1,f.id,f.len)}
           else if(n>=f.real&&n<f.real+240000&&f.st>=0){const q2=path([[ts,235],[ts,170],[t0,170],[t0,0]],(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+240000&&n<f.real+285000){const fr=Math.pow((n-f.real-240000)/45000,1.8),q2=path([[t0,0],[tE,0]],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+285000&&n<f.real+375000){const fr=(n-f.real-285000)/90000,p=pos(tE+dT*fr*3000/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1+.5*fr,1-fr,f.id,f.len)}
