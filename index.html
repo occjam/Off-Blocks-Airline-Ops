@@ -314,12 +314,22 @@ function wxOps(dst,t,arr,id,pax){const tn=now(),live=Math.abs(arr-tn)<3*36e5;let
   if(pd&&r3<pd){const al=wxAlt(dst,arr);if(al){o.div=al;o.hold=Math.max(o.hold,25);}}
   return o}
 
-/* surface wind and the runway in use: live airport wind when we have it, otherwise a deterministic model (trades in the tropics, westerlies in mid-latitudes) that changes every 3 hours */
-function apWind(k,tms){const a=WX.ap&&WX.ap[k];if(a&&a.wd!=null&&a.ws!=null&&WX.apt&&Math.abs(tms-now())<2*36e5)return{d:a.wd,s:a.ws,live:1};const A=AP[k];if(!A)return null;const R=rng(hs(k+'w'+Math.floor(tms/10800000))),r1=R(),r2=R(),al=Math.abs(A.lat);
-  const base=al<28?(A.lat>=0?75:115):al<62?(A.lat>=0?265:285):320;return{d:Math.round(((base+(r1-.5)*110+360)%360)/10)*10,s:Math.round(4+r2*10),live:0}}
-function rwyActive(k,tms,Rs){const R=Rs||(typeof RWY!=='undefined'&&RWY[k]);if(!R||!R.length)return null;const w=apWind(k,tms)||{d:0,s:0},L0=Math.hypot(R[0][2]-R[0][0],R[0][3]-R[0][1])||1;let best=null;
-  R.forEach((r,i)=>{const hx=r[2]-r[0],hy=r[3]-r[1],l=Math.hypot(hx,hy);if(l<L0*.6)return;[1,-1].forEach(sg=>{const ux=hx/l*sg,uy=hy/l*sg,hdg=(Math.atan2(ux,uy)*180/Math.PI+360)%360,hw=Math.cos((hdg-w.d)*Math.PI/180)*Math.max(w.s,3),sc=hw+(l/L0)*2;if(!best||sc>best.sc)best={i,r,sg,u:[ux,uy],hdg,hw,sc,w,id:(sg>0?r[5]:r[6])||''}})});return best}
-function rwyLine(k){try{const b=rwyActive(k,now());if(!b)return'';return'<div class="mut">Runway in use <b style="color:var(--tx)">'+(b.id||Math.round(b.hdg/10))+'</b> · wind '+String(Math.round(b.w.d)).padStart(3,'0')+'° '+Math.round(b.w.s)+' kt ('+(b.w.live?'live':'model')+') · headwind '+Math.max(0,Math.round(b.hw))+' kt</div>'}catch(e){return''}}
+/* surface wind and the runway in use. Live airport wind when we have it, otherwise a smooth model (trades in the tropics, westerlies in mid-latitudes, slowly veering). The runway changes only when the wind makes the active one a tailwind and another is clearly better, never on a timer. */
+function apWind(k,tms){const a=WX.ap&&WX.ap[k];if(a&&a.wd!=null&&a.ws!=null&&WX.apt&&Math.abs(tms-now())<2*36e5)return{d:a.wd,s:a.ws,live:1};const A=AP[k];if(!A)return null;const al=Math.abs(A.lat),t=tms/36e5,h=hs(k+'wm'),p1=(h%1000)/1000*6.283,p2=((h>>>10)%1000)/1000*6.283,
+  base=al<28?(A.lat>=0?75:115):al<62?(A.lat>=0?265:285):320,T=6.283;
+  return{d:Math.round(((base+60*Math.sin(T*t/26+p1)+30*Math.sin(T*t/9+p2)+720)%360)/10)*10,s:Math.max(2,Math.round(7+4*Math.sin(T*t/17+p2)+3*Math.sin(T*t/6.3+p1))),live:0}}
+const RWS={};
+function rwyScore(R,w){const L0=Math.hypot(R[0][2]-R[0][0],R[0][3]-R[0][1])||1,o=[];R.forEach((r,i)=>{const hx=r[2]-r[0],hy=r[3]-r[1],l=Math.hypot(hx,hy);if(l<L0*.6)return;[1,-1].forEach(sg=>{const ux=hx/l*sg,uy=hy/l*sg,hdg=(Math.atan2(ux,uy)*180/Math.PI+360)%360,hw=Math.cos((hdg-w.d)*Math.PI/180)*w.s;o.push({i,r,sg,u:[ux,uy],hdg,hw,sc:hw+(l/L0)*2,w,id:(sg>0?r[5]:r[6])||''})})});return o}
+function rwyActive(k,tms,Rs){const R=Rs||(typeof RWY!=='undefined'&&RWY[k]);if(!R||!R.length)return null;const n=now(),isNow=Math.abs(tms-n)<6e5;
+  const w=apWind(k,tms)||{d:0,s:0},C=rwyScore(R,w);if(!C.length)return null;const best=C.reduce((a,b)=>b.sc>a.sc?b:a);
+  if(!isNow||Rs)return best;
+  let st=RWS[k];if(st&&(st.t>n||!C.find(c=>c.i===st.i&&c.sg===st.sg)))st=null;
+  if(!st){RWS[k]={i:best.i,sg:best.sg,t:n,hist:(RWS[k]&&RWS[k].hist)||[]};return best}
+  const cur=C.find(c=>c.i===st.i&&c.sg===st.sg);
+  if(cur!==best&&(best.hw-cur.hw>=5)&&(cur.hw<3)&&n-st.t>=30*60000){st.hist.push({t:n,from:{i:st.i,sg:st.sg,id:cur.id},to:{i:best.i,sg:best.sg,id:best.id}});if(st.hist.length>12)st.hist.shift();st.i=best.i;st.sg=best.sg;st.t=n;return best}
+  return cur}
+function rwyHist(k){return(RWS[k]&&RWS[k].hist)||[]}
+function rwyLine(k){try{const b=rwyActive(k,now());if(!b)return'';const h=rwyHist(k),l=h[h.length-1],ago=l?Math.round((now()-l.t)/60000):0;return'<div class="mut">Runway in use <b style="color:var(--tx)">'+(b.id||Math.round(b.hdg/10))+'</b> · wind '+String(Math.round(b.w.d)).padStart(3,'0')+'° '+Math.round(b.w.s)+' kt ('+(b.w.live?'live':'model')+') · headwind '+Math.max(0,Math.round(b.hw))+' kt'+(l&&ago<180?' · changed from '+l.from.id+' '+ago+' min ago':'')+'</div>'}catch(e){return''}}
 
 const LIV=['#2dd4bf','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#34d399','#f472b6','#0ea5a4','#1d4ed8','#b91c1c','#334155'];
 const LIV2=['#ffffff','#0f172a','#fbbf24','#2dd4bf','#f87171','#a3e635'];
@@ -1127,7 +1137,7 @@ function routeBuild(o,d){const km=gcKm(o,d);if(km<120)return null;
   for(let it=0;it<2;it++){const Q=[P[0]];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1];Q.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75])}Q.push(P[P.length-1]);P=Q}
   const cum=[0];for(let i=1;i<P.length;i++){const cl=Math.cos((P[i][0]+P[i-1][0])/2*RAD);cum.push(cum[i-1]+Math.hypot((P[i][1]-P[i-1][1])*cl,P[i][0]-P[i-1][0])*111.2)}
   return{P,cum,tot:cum[cum.length-1]||1}}
-function routeGet(o,d){const key=o.iata+'>'+d.iata+'|'+Math.floor(now()/10800000)+'|'+evAct().map(e=>e.id).join(',');let r=RTC.get(key);if(r===undefined){r=routeBuild(o,d);RTC.set(key,r);if(RTC.size>600)RTC.delete(RTC.keys().next().value)}return r}
+function routeGet(o,d){const ra=k=>{try{const b=rwyActive(k.iata,now());return b?b.i+(b.sg>0?'+':'-'):'x'}catch(e){return'x'}},key=o.iata+'>'+d.iata+'|'+ra(o)+ra(d)+'|'+evAct().map(e=>e.id).join(',');let r=RTC.get(key);if(r===undefined){r=routeBuild(o,d);RTC.set(key,r);if(RTC.size>600)RTC.delete(RTC.keys().next().value)}return r}
 function gcPtD(o,d,f){const R=routeGet(o,d);if(!R)return gcPt(o,d,f);f=Math.max(0,Math.min(1,f));const s=f*R.tot,C=R.cum;let lo=0,hi=C.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(C[m]<=s)lo=m;else hi=m}const sg=C[hi]-C[lo]||1,u=(s-C[lo])/sg,a=R.P[lo],b=R.P[hi];let lon=a[1]+(b[1]-a[1])*u;lon=((lon+540)%360+360)%360-180;return[a[0]+(b[0]-a[0])*u,lon]}
 function routeLine(o,d,n){let s='',pl=null;n=n||80;for(let i=0;i<=n;i++){const p=gcPtD(o,d,i/n),q=P(p[1],p[0]);const brk=!q[2]||(MS.proj==='flat'&&pl!==null&&Math.abs(p[1]-pl)>180);s+=(brk||i===0?'M':'L')+q[0].toFixed(1)+' '+q[1].toFixed(1);pl=p[1]}return s}
 function gcPath(a,b){let s='',pl=null;for(let i=0;i<=48;i++){const p=gcPt(a,b,i/48),X=mx(p[1]),Y=my(p[0]);s+=(pl===null||Math.abs(p[1]-pl)>180?'M':'L')+X.toFixed(1)+' '+Y.toFixed(1);pl=p[1]}return s}
@@ -2643,7 +2653,7 @@ function incOsmBuild(hub,j,save){const A=AP[hub],cl=Math.cos(A.lat*Math.PI/180),
         if(a==='runway'){if(pts.length>1){const p0=pts[0],p1=pts[pts.length-1],rf=String(t.ref||'').split('/');D.rw.push([p0[0],p0[1],p1[0],p1[1],parseFloat(t.width)||45,rf[0]||'',rf[1]||''])}}else if(a==='taxiway'||a==='taxilane')D.tw.push(pts);else if(a==='apron'){D.ap.push(pts);if(bad)D.bap.push(pts)}else if(a==='terminal'||t.building==='terminal'){if(bad)D.bt.push(pts);else D.tm.push(pts)}
         else if(a==='parking_position'&&!bad){const c=pts.reduce((q,p)=>[q[0]+p[0],q[1]+p[1]],[0,0]);D.st.push([Math.round(c[0]/pts.length),Math.round(c[1]/pts.length)])}}});
     if(save){try{const x=JSON.stringify(D);if(x.length<700000)localStorage.setItem('ob-osm4-'+hub,x)}catch(e){}}}else D=j;
-  if(D.rw&&D.rw.length&&typeof RWY!=='undefined'){const rr=incMergeRw(D.rw).filter(r=>Math.hypot(r[2]-r[0],r[3]-r[1])>400).sort((a,b)=>Math.hypot(b[2]-b[0],b[3]-b[1])-Math.hypot(a[2]-a[0],a[3]-a[1])).slice(0,8);if(rr.length){RWY[hub]=rr;delete INC_LY[hub]}}
+  if(D.rw&&D.rw.length&&typeof RWY!=='undefined'){const rr=incMergeRw(D.rw).filter(r=>Math.hypot(r[2]-r[0],r[3]-r[1])>400).sort((a,b)=>Math.hypot(b[2]-b[0],b[3]-b[1])-Math.hypot(a[2]-a[0],a[3]-a[1])).slice(0,8);if(rr.length){RWY[hub]=rr;delete INC_LY[hub];try{delete RWS[hub]}catch(e){}}}
   const sg=L=>{const o=[];L.forEach(p=>{for(let i=1;i<p.length;i++)o.push([p[i-1],p[i]]);if(p.length>2)o.push([p[p.length-1],p[0]])});return o},tv=sg(D.tm),bv=sg(D.bt||[]),refS=tv.length?tv:sg(D.ap).length?sg(D.ap):[[[0,0],[0,1]]];
   const inP=(p,poly)=>{let c=false;for(let i=0,k=poly.length-1;i<poly.length;k=i++){const a=poly[i],b=poly[k];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
   const nsd=(p,S)=>{let m=1e18,q=null;S.forEach(([a,b])=>{const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1;let t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));const x=a[0]+dx*t,y=a[1]+dy*t,d=Math.hypot(x-p[0],y-p[1]);if(d<m){m=d;q=[x,y]}});return{d:m,q}};
@@ -2664,8 +2674,9 @@ function incNSe(hub){const o=OSMC[hub],ns=incNS(hub);return o&&o.ok?Math.min(ns,
 function incNRe(hub){const o=OSMC[hub],nr=incNR(hub);return o&&o.ok?Math.min(nr,Math.max(0,o.st.length-incNSe(hub))):nr}
 /* real-scale airfield on the map: real runways from OurAirports, taxiways/apron/stands laid out from them */
 const INC_LY={},INC_FL={};let MGA=[];
-function incLay(hub){const blk=Math.floor(now()/10800000),c0=INC_LY[hub];if(c0&&c0.blk===blk)return c0.v;const v=incLay0(hub);INC_LY[hub]={blk,v};return v}
-function incLay0(hub){let R=typeof RWY!=='undefined'&&RWY[hub];if(!R||!R.length)return null;const ac=rwyActive(hub,now(),R);if(ac)R=[R[ac.i]].concat(R.filter((x,j)=>j!==ac.i));
+function incLay(hub){let ac=null;try{ac=rwyActive(hub,now())}catch(e){}const blk=ac?ac.i+':'+ac.sg:'x',c0=INC_LY[hub];if(c0&&c0.blk===blk)return c0.v;const v=incLay0(hub,ac);INC_LY[hub]={blk,v};return v}
+const INC_LO={};function incLayOf(hub,st){if(!st)return null;const key=hub+st.i+':'+st.sg,c=INC_LO[key];if(c!==undefined)return c;return INC_LO[key]=incLay0(hub,st)}
+function incLay0(hub,ac){let R=typeof RWY!=='undefined'&&RWY[hub];if(!R||!R.length)return null;if(ac&&!R[ac.i])ac=null;if(ac)R=[R[ac.i]].concat(R.filter((x,j)=>j!==ac.i));
   const r=R[0],A=[r[0],r[1]],B=[r[2],r[3]],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy),u=[dx/L,dy/L],v=[-u[1],u[0]],d=-(A[0]*v[0]+A[1]*v[1]),side=Math.abs(d)>60?(d>0?1:-1):(hs('sd'+hub)%2?1:-1);
   return{R,A,B,L,u,w:[v[0]*side,v[1]*side],t0:ac?(ac.sg>0?.04:.96):(hs('dr'+hub+dayIdx(now()))%2?.04:.96),act:ac}}
 const INL={Regional:30,Narrow:38,Mid:56,Wide:66,A388:73,B748:71,B744:70,A346:75,B77W:74,A359:67,B789:63,B788:57,A333:64,A332:59,B763:55,B772:64,E190:36,E170:30,E175:32,AT76:27,DH8D:33,CRJ9:36,CRJ7:32,CRJ2:27,A21N:44,A321:44,B739:42,B38M:39,B737:34,A319:34,A19N:34,B752:47,B753:55};
@@ -2678,7 +2689,9 @@ function incFl(hub,n){const k=Math.floor(n/15000),c=INC_FL[hub];if(c&&c.k===k)re
   if(isH){const B=gnBoard(hub,n);L=B.L.filter(x=>!x.cx).map(x=>({id:x.id,own:x.own,who:x.who,to:x.to,tn:x.t&&x.t[1],dep:x.dep,arr:x.dep-TN+x.ib*MIN,real:x.dep+x.tot*MIN,len:incLen(x.t),col:x.own?(typeof acc==='function'?acc():'#2dd4bf'):incCol(x.who)}));alloc(L,0,NS)}
   const o=[],con=isH?(gnS().c[hub]||{}):{};
   try{if(typeof AIC!=='undefined'&&AIC)AIC.forEach(c=>{if(c.dead||(con[c.id]&&con[c.id].on))return;(c.rt||[]).forEach(r=>{if(r.o!==hub&&r.d!==hub)return;const t=TY[r.code];if(!t)return;const to=r.o===hub?r.d:r.o;for(let q=0;q<r.f;q++){const dep=dayStart(day)+Math.round(360+((q+.5)/r.f)*960)*MIN,ds=typeof aiDis==='function'?aiDis(c,r.o+r.d+q+(r.o===hub?0:1),day,to):{s:0,dm:0};if(ds.s===2)continue;const ib=ds.s===1?ds.dm:0;o.push({id:'x'+c.id+r.o+r.d+q+day,own:0,who:c.name,to,tn:t[1],dep,arr:dep-TN+ib*MIN,real:dep+ib*MIN,len:incLen(t),col:aiColC(c)})}})})}catch(e){}
-  alloc(o,NS,NR);L=L.concat(o);INC_FL[hub]={k,L};return L}
+  alloc(o,NS,NR);L=L.concat(o);
+  try{const H=rwyHist(hub);if(H.length)L.forEach(f=>{const td0=f.arr-240000;for(const ch of H){if(ch.t>=td0-60000&&ch.t<td0){f.ga=300000+(hs(String(f.id))%120)*1000;f.gaT=ch.t;f.td0=td0;f.gaFrom=ch.from;f.arr+=f.ga;break}}})}catch(e){}
+  INC_FL[hub]={k,L};return L}
 function incInfo(g){const f=(INC_FL[g.hub]&&INC_FL[g.hub].L||[]).find(x=>x.id===g.id);if(!f)return'<div class="row"><b>Flight</b><button data-ac="x">Close</button></div>';const n=now();
   return'<div class="row"><b>'+f.who+' to '+f.to+'</b><button data-ac="x">Close</button></div><div class="mut" style="font-size:12px;margin-top:4px">'+(f.tn||'')+' · scheduled '+hhmm(f.dep)+(f.real>f.dep?' · expected '+hhmm(f.real):'')+'</div><div class="card" style="margin-top:8px"><b>'+(n<f.arr?'Inbound':n<f.real?'On stand':'Departing')+'</b><div class="mut" style="font-size:12px;margin-top:3px">This airline handles its own flight at '+g.hub+'. Its aircraft use their own stands, not yours.</div></div>'}
 function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><pattern id="inch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="#e5484d"/></pattern></defs>';
@@ -2712,6 +2725,11 @@ function incAf(P,ke,W,H){MGA=[];const n=now(),hubs=S.hubs||[];let o='<defs><patt
           else if(n>=f.real&&n<f.real+240000&&f.st>=0){const q2=incPathM(outP(f.st),(n-f.real)/240000);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+240000&&n<f.real+285000){const fr=Math.pow((n-f.real-240000)/45000,1.8),q2=incPathM([pos(tEnt,0),pos(tE,0)],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(!i&&n>=f.real+285000&&n<f.real+375000){const fr=(n-f.real-285000)/90000,p=pos(tE+dT*fr*3000/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1+.5*fr,1-fr,f.id,f.len)}
+          else if(!i&&f.ga&&n>=f.td0-60000&&n<td-60000){const Lo=incLayOf(hub,f.gaFrom);if(Lo){const po=(t,off)=>[Lo.A[0]+Lo.u[0]*t*Lo.L+Lo.w[0]*off,Lo.A[1]+Lo.u[1]*t*Lo.L+Lo.w[1]*off],dTo=Lo.t0<.5?1:-1,tto=Lo.t0+dTo*.12,fr0=(f.gaT-f.td0+60000)/60000;
+            if(n<f.gaT){const fr=(n-f.td0+60000)/60000,p=po(tto-dTo*(1-fr)*2800/Lo.L,0);g+=ac(p[0],p[1],Lo.u[0]*dTo,Lo.u[1]*dTo,c,1.4-.4*fr,1,f.id,f.len)}
+            else{const P0=po(tto-dTo*(1-fr0)*2800/Lo.L,0),hx=Lo.u[0]*dTo,hy=Lo.u[1]*dTo,ex=(1-fr0)*2800+2800,P1=[P0[0]+hx*ex,P0[1]+hy*ex],P2=[P1[0]-Lo.w[0]*3300,P1[1]-Lo.w[1]*3300],P3=[P2[0]-hx*7500,P2[1]-hy*7500],nf=pos(t0+dT*.12-dT*2800/L,0);let pts=[P0,P1,P2,P3,nf];
+              for(let it=0;it<2;it++){const Q=[pts[0]];for(let z=0;z<pts.length-1;z++){const a=pts[z],b=pts[z+1];Q.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75])}Q.push(pts[pts.length-1]);pts=Q}
+              const q2=incPathM(pts,(n-f.gaT)/Math.max(1,td-60000-f.gaT));g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1.35,1,f.id,f.len)}}}
           else if(!i&&n>=td-60000&&n<td){const fr=(n-td+60000)/60000,tt=t0+dT*.12,p=pos(tt-dT*(1-fr)*2800/L,0);g+=ac(p[0],p[1],u[0]*dT,u[1]*dT,c,1.4-.4*fr,1,f.id,f.len)}
           else if(!i&&n>=td&&n<td+40000){const fr=1-Math.pow(1-(n-td)/40000,2),q2=incPathM([pos(t0+dT*.12,0),pos((tEx-t0)*dT>.2?tEx:t0+dT*.5,0)],fr);g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
           else if(n>=td+40000&&n<f.arr&&f.st>=0){const q2=incPathM(inP(f.st),(n-td-40000)/(f.arr-td-40000));g+=ac(q2.e,q2.n,q2.dx,q2.dy,c,1,1,f.id,f.len)}
