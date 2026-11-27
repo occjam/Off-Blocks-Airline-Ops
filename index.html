@@ -1163,8 +1163,9 @@ function airFlight(f){if(!NETOK||(f.mx&&now()<f.mx.until))return null;const t=TY
 
 /* ---- v0.30 map: flat + globe, dark / hybrid / terrain ---- */
 const MS={proj:'flat',style:'esri',cx:-77,cy:18,k:3,R:200,night:1,W:360,H:500,sel:null,rad:1},MP={};
-function rvAcInfo(a){let f;try{f=aiFlt(a)}catch(e){return''}const g=f.prof>=0;
-  return(f.dm?'<div class="mut" style="margin-top:6px;color:#fbbf24">Delayed '+f.dm+' min · costs about $'+Math.round(f.dc).toLocaleString()+'</div>':'')+'<div class="mut" style="margin-top:6px">Aircraft <b style="color:var(--tx)">'+a.code+' · '+f.t[1]+'</b></div><div class="mut">Passengers <b style="color:var(--tx)">'+f.pax+' / '+f.seats+'</b> ('+Math.round(f.lf*100)+'% full)</div><div class="mut">Fare about <b style="color:var(--tx)">$'+Math.round(f.fare)+'</b> · revenue $'+Math.round(f.rev).toLocaleString()+' this flight</div><div class="mut">Profit this flight <b style="color:'+(g?'#4ade80':'#f87171')+'">'+(g?'+':'-')+'$'+Math.abs(Math.round(f.prof)).toLocaleString()+'</b> ('+(f.rev>0?Math.round(f.prof/f.rev*100):0)+'% margin)</div>'}
+function rvAcInfo(a){let f;try{f=aiFlt(a)}catch(e){return''}
+  return(f.dm?'<div class="mut" style="margin-top:6px;color:#fbbf24">Delayed '+f.dm+' min</div>':'')+'<div class="mut" style="margin-top:6px">Aircraft <b style="color:var(--tx)">'+a.code+' · '+f.t[1]+'</b></div><div class="mut">Seats <b style="color:var(--tx)">'+f.seats+'</b></div>'}
+function rvDelay(a){try{const f=aiFlt(a);return f.dm?'<div class="mut" style="margin-top:6px;color:#fbbf24">Delayed '+f.dm+' min</div>':''}catch(e){return''}}
 /* weather holds and diversions drawn on the track: the aircraft flies a racetrack at the approach fix for the hold time, then lands, or heads for the alternate */
 const HLD={};
 function holdOf(key,d,t,arrMs,durMs){if(!key||typeof wxOps!=='function')return null;const n=now(),c=HLD[key];if(c&&n-c.at<30000)return c.h;let h=null;try{const wo=wxOps(d.iata,t,arrMs,key,0);if(wo&&(wo.hold>0||wo.div))h={hold:wo.hold||0,div:wo.div||null,T:durMs}}catch(e){}HLD[key]={at:n,h};if(Object.keys(HLD).length>400){for(const k in HLD)if(n-HLD[k].at>6e5)delete HLD[k]}return h}
@@ -1269,26 +1270,32 @@ function mapTap(cx,cy){const [x,y]=mapAt(cx,cy);let best=null,bd=22;
   if(!best){bd=17;const ke=kEff();for(const k in AP){if(!apVis(AP[k],k,ke))continue;const q=P(AP[k].lon,AP[k].lat);if(!q[2])continue;const d=Math.hypot(q[0]-x,q[1]-y);if(d<bd){bd=d;best={ap:k}}}}
   MSEL=best?(best.fl?{fl:best.fl.f.reg}:best.dl?{dl:best.dl}:best.rv?{rv:best.rv}:{ap:best.ap}):null;mapInfo();mapUpdate()}
 /* flight data: distance, ground speed, altitude and ETA derived from the route, aircraft type and progress */
-function mapFS(o,d,p,t,etaMs){const R=Math.PI/180,a1=o.lat*R,a2=d.lat*R,dl=(d.lon-o.lon)*R,D=Math.acos(Math.min(1,Math.sin(a1)*Math.sin(a2)+Math.cos(a1)*Math.cos(a2)*Math.cos(dl)))*3440;
+function mapFS(o,d,p,t,etaMs,part){const R=Math.PI/180,a1=o.lat*R,a2=d.lat*R,dl=(d.lon-o.lon)*R,D=Math.acos(Math.min(1,Math.sin(a1)*Math.sin(a2)+Math.cos(a1)*Math.cos(a2)*Math.cos(dl)))*3440;
   const vc=t[8]||450,cr=vc<330?25000:t[2]==='Wide'?(t[0]==='A388'?37000:39000):t[2]==='Regional'&&vc<420?33000:37000,x=D*p;
   const alt=Math.max(0,Math.min(cr,x/2.8*1000,(D-x)/3*1000)),f=Math.min(1,alt/(cr*.55)),sp=Math.round((p<.004||p>.996?140:Math.max(150,vc*(.45+.55*Math.pow(f,.7))))/5)*5;
   const ph=p<.004?'Takeoff':p>.996?'Landing':x/2.8*1000<cr&&x/2.8*1000<=(D-x)/3*1000?'Climbing':(D-x)/3*1000<cr?'Descending':'Cruise';
   const wd=wxAt(o,d,Math.max(0,Math.min(1,p)),now()),af=wxAF(t),tw=Math.round(wd.tw*af),sp2=sp+Math.round(tw*Math.min(1,f)),eta=new Date(etaMs),hh=String(eta.getUTCHours()).padStart(2,'0')+':'+String(eta.getUTCMinutes()).padStart(2,'0');
-  return'<div class="mut" style="margin-top:6px">Distance <b>'+Math.round(x).toLocaleString()+'</b> of '+Math.round(D).toLocaleString()+' nm · <b>'+Math.round(D-x).toLocaleString()+' nm</b> to go</div>'
-   +'<div class="mut">Ground speed <b>'+sp2+' kt</b> · Altitude <b>'+(alt<500?'ground':'FL'+String(Math.round(alt/1000)*10).padStart(3,'0'))+'</b>'+(alt>=500?' ('+(Math.round(alt/100)*100).toLocaleString()+' ft)':'')+' · '+ph+'</div>'
-   +'<div class="mut">Wind <b>'+Math.round(wd.sp*af)+' kt</b> · '+(Math.abs(tw)<8?'mostly crosswind':Math.abs(tw)+' kt '+(tw>0?'tailwind':'headwind'))+(WX.live?' (live)':'')+'</div>'
-   +'<div class="mut">ETA <b>'+hh+' UTC</b> · in '+fmtD(etaMs-now())+'</div>'}
+  const fl=alt<500?'ground':'FL'+String(Math.round(alt/1000)*10).padStart(3,'0'),
+    A='<div class="mut" style="margin-top:6px"><b style="color:var(--tx)">'+fl+'</b>'+(alt>=500?' ('+(Math.round(alt/100)*100).toLocaleString()+' ft)':'')+' · <b style="color:var(--tx)">'+sp2+' kt</b> · '+ph+'</div><div class="mut">ETA <b style="color:var(--tx)">'+hh+' UTC</b> · in '+fmtD(etaMs-now())+'</div>',
+    B='<div class="mut" style="margin-top:6px">Distance <b>'+Math.round(x).toLocaleString()+'</b> of '+Math.round(D).toLocaleString()+' nm · <b>'+Math.round(D-x).toLocaleString()+' nm</b> to go</div><div class="mut">Wind <b>'+Math.round(wd.sp*af)+' kt</b> · '+(Math.abs(tw)<8?'mostly crosswind':Math.abs(tw)+' kt '+(tw>0?'tailwind':'headwind'))+(WX.live?' (live)':'')+'</div>';
+  return part==='a'?A:part==='b'?B:B+A}
+/* FlightRadar-style card: photo + headline, then a Flight tab (what you can see from outside) and a Details tab */
+let MTAB='f';
+function frCard(photo,title,sub,basic,detail){const tb=(k,l)=>'<button data-mtab="'+k+'" style="flex:1;background:'+(MTAB===k?'var(--teal)':'transparent')+';color:'+(MTAB===k?'#06241f':'var(--mut,#8b98a9)')+';border:0;border-radius:7px;padding:5px 0;font-weight:700;font-size:12px">'+l+'</button>';
+  return'<div style="display:flex;gap:10px;align-items:center">'+(photo?'<div style="width:104px;flex:none;pointer-events:none">'+photo+'</div>':'')+'<div style="min-width:0;flex:1">'+title+sub+'</div></div><div style="display:flex;gap:4px;margin-top:8px;background:rgba(255,255,255,.06);border-radius:9px;padding:2px">'+tb('f','Flight')+tb('d','Details')+'</div><div>'+(MTAB==='d'?detail:basic)+'</div>'}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-mtab]');if(!b)return;e.stopPropagation();MTAB=b.dataset.mtab;mapInfo0()},true);
 function mapInfo0(){const el=$('#minfo');if(!el)return;MPREV=null;
   const card=h=>'<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,.35)">'+h+'</div>';
   if(!MSEL){el.innerHTML='';return}
   if(MSEL.rv){const r=RFL.find(x=>x.a.key===MSEL.rv);if(!r){el.innerHTML='';MSEL=null;return}const a=r.a,o=AP[a.o],d=AP[a.d],T=AIT[a.c.type];
-    el.innerHTML=card('<div class="row"><b>'+a.c.name+'</b><span class="badge" style="color:'+aiColC(a.c)+'">'+T.n+'</span></div><div class="mut" style="margin-top:4px">'+o.iata+' → '+d.iata+' · '+o.city+' to '+d.city+'</div>'+mapFS(o,d,r.p,TY[a.code],now()+a.bm*(1-r.p)*60000)+holdTxt(r.h,r.p,d.iata)+'<div class="mut" style="margin-top:4px">Rival flight on typical schedule</div>'+rvAcInfo(a));return}
+    const tc=TY[a.code],ph=tc?th(tc,AIC.indexOf(a.c)):'',et=now()+a.bm*(1-r.p)*60000;
+    el.innerHTML=card(frCard(ph,'<div class="row"><b>'+a.c.name+'</b><span class="badge" style="color:'+aiColC(a.c)+'">'+T.n+'</span></div>','<div style="margin-top:3px"><b>'+o.iata+' → '+d.iata+'</b></div><div class="mut">'+o.city+' to '+d.city+'</div>',mapFS(o,d,r.p,tc,et,'a')+rvDelay(a)+holdTxt(r.h,r.p,d.iata),mapFS(o,d,r.p,tc,et,'b')+rvAcInfo(a)+'<div class="mut" style="margin-top:4px">Typical schedule</div>'));return}
   if(MSEL.dl){const r=MDL.find(x=>x.k===MSEL.dl);if(!r){el.innerHTML='';MSEL=null;return}const n0=now(),t=TY[r.code],kl=r.kind==='lease'?'Lease':r.kind==='own'?'Used purchase':'New aircraft',pr=r.prep;let h;
     if(r.o){const o=r.o;h='<div class="row"><b>'+kl+' · '+t[1]+(o.n>1?' x'+o.n:'')+'</b><span class="badge" style="color:#fbbf24">Delivery</span></div><div class="mut" style="margin-top:4px">'+(pr?(o.kind?'Preparing at ':'In production at ')+o.from[3]+' · ferry leaves in '+fmtD(o.fs-n0):'Ferry '+o.from[0]+' → '+S.base)+'</div><div class="mut">'+(o.from[3]||'')+(pr?'':' to '+(AP[S.base]?AP[S.base].city:S.base))+'</div>'+(dlvStops(o).length?'<div class="mut">Fuel stop'+(dlvStops(o).length>1?'s':'')+': '+dlvStops(o).map(k=>k+' ('+AP[k].city+')').join(', ')+'</div>':'')+(pr?'':mapFS({lat:o.from[1],lon:o.from[2]},AP[S.base],r.pc,t,o.due))}
     else{const c=r.c,p=r.p;h='<div class="row"><b>'+c.name+'</b><span class="badge" style="color:'+aiColC(c)+'">Rival delivery</span></div><div class="mut" style="margin-top:4px">'+t[1]+(p.n>1?' x'+p.n:'')+' · '+(pr?'preparing at '+p.from[3]+' · ferry leaves in '+fmtD(p.fs-n0):'ferry '+p.from[0]+' → '+p.r.o)+'</div>'+(pr?'':mapFS({lat:p.from[1],lon:p.from[2]},AP[p.r.o],r.pc,t,p.due))+'<div class="mut" style="margin-top:4px">Opens '+p.r.o+'-'+p.r.d+'</div>'+rvAcInfo({c:c,r:p.r,code:p.r.code})}
     el.innerHTML=card(h);return}
   if(MSEL.fl){const a=MFL.find(x=>x.f.reg===MSEL.fl);if(!a){el.innerHTML='';MSEL=null;return}const o=AP[a.dir?a.r.d:a.r.o],d=AP[a.dir?a.r.o:a.r.d];
-    el.innerHTML=card('<div class="row"><b>'+a.f.reg+' · '+a.t[1]+'</b><span class="mut">'+o.iata+' → '+d.iata+'</span></div><div class="mut" style="margin-top:4px">'+o.city+' to '+d.city+'</div>'+mapFS(o,d,a.p,a.t,a.arr)+holdTxt(a.h,a.p,d.iata));return}
+    el.innerHTML=card(frCard(th(a.t,a.f.lv,1),'<div class="row"><b>'+a.f.reg+'</b><span class="badge" style="color:var(--teal)">'+a.t[0]+'</span></div>','<div style="margin-top:3px"><b>'+o.iata+' → '+d.iata+'</b></div><div class="mut">'+o.city+' to '+d.city+'</div>',mapFS(o,d,a.p,a.t,a.arr,'a')+holdTxt(a.h,a.p,d.iata),mapFS(o,d,a.p,a.t,a.arr,'b')+'<div class="mut" style="margin-top:4px">Aircraft <b style="color:var(--tx)">'+a.t[1]+'</b></div>'));return}
   const k=MSEL.ap,Pp=AP[k];if(!Pp){el.innerHTML='';return}const base=S.base,isBase=k===base,hub=(S.hubs||[]).includes(k);
   let h='<div class="row"><b>'+Pp.iata+' · '+Pp.city+'</b><span class="mut">'+Pp.cc+(hub?' · your hub':'')+'</span></div>';
   h+='<div class="mut" style="margin-top:4px">Runway grade '+Pp.grade+' · population '+(Pp.pop>=1e6?(Pp.pop/1e6).toFixed(1)+'M':Math.round(Pp.pop/1e3)+'k')+'</div>'+wxLine(k)+(typeof rwyLine==='function'?rwyLine(k):'');
