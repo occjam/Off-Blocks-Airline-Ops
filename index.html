@@ -1342,8 +1342,10 @@ function mapInfo0(){const el=$('#minfo');if(!el)return;MPREV=null;
   if(RW.length)bs+='<div style="margin-top:8px"><button id="mzap" style="border-radius:8px;padding:8px 14px;font-weight:700">Zoom to airfield</button></div>';
   const ax=(typeof apxGet==='function')?apxGet(k):null,elm=typeof apElev==='function'?apElev(k):null,elT=elm!=null?Math.round(elm*3.281).toLocaleString()+' ft ('+elm.toLocaleString()+' m)':null;
   if(elT){bs=bs.replace(wl,wl+'<div class="mut">Elevation <b style="color:var(--tx)">'+elT+'</b></div>');dt='<div class="mut" style="margin-top:6px">Elevation <b style="color:var(--tx)">'+elT+'</b></div>'+dt}
-  if(ax&&ax.img&&ax.by!==undefined)dt+='<div class="mut" style="margin-top:8px;font-size:11px">Photo: '+(ax.by||'Wikimedia Commons')+(ax.lic?' · '+ax.lic:'')+'</div>';
-  const phh=ax&&ax.img?'<img src="'+ax.img+'" loading="lazy" alt="'+Pp.iata+'" onerror="this.style.display=\'none\'" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block">':'';
+  const sat=(()=>{const R2=(typeof RWY!=='undefined'&&RWY[k])||[];let ex=0;R2.forEach(r=>{ex=Math.max(ex,Math.abs(r[0]),Math.abs(r[1]),Math.abs(r[2]),Math.abs(r[3]))});const hw=Math.max(1800,ex*1.25+500),hh=hw*.75,sc=1/Math.cos(Pp.lat*Math.PI/180),mx=Pp.lon*20037508.34/180,my=Math.log(Math.tan(Math.PI/4+Pp.lat*Math.PI/360))*6378137,w=hw*sc,h=hh*sc;
+    return'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox='+[mx-w,my-h,mx+w,my+h].map(v=>Math.round(v)).join(',')+'&bboxSR=3857&imageSR=3857&size=520,390&format=jpg&f=image'})();
+  dt+='<div class="mut" style="margin-top:8px;font-size:11px">Aerial view: Esri, Maxar, Earthstar Geographics</div>';
+  const fb=ax&&ax.img?ax.img:'',phh='<img src="'+sat+'" loading="lazy" alt="'+Pp.iata+'" onerror="if(\''+fb+'\'&&!this.dataset.f){this.dataset.f=1;this.src=\''+fb+'\'}else this.style.display=\'none\'" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block">';
   el.innerHTML=card(frCard(phh,'<div class="row"><b style="font-size:18px">'+Pp.iata+'</b><span class="badge">'+Pp.cc+'</span></div>','<div class="mut">'+Pp.city+(hub?' · your hub':isBase?' · your base':'')+'</div>',bs,dt))}
 const CATK={Regional:[.78,.8],Narrow:[1,1],Mid:[1.15,1.12],Wide:[1.5,1.32]},catS=c=>{const k=CATK[c]||CATK.Narrow;return ' scale('+k[0]+' '+k[1]+')'};
 const PLANE='M10,0C10,-1.2 9,-1.6 7,-1.6L1,-1.6L-3,-8L-5.5,-8L-3.5,-1.6L-8,-1.6L-9.5,-4L-11,-4L-10,0L-11,4L-9.5,4L-8,1.6L-3.5,1.6L-5.5,8L-3,8L1,1.6L7,1.6C9,1.6 10,1.2 10,0Z';
