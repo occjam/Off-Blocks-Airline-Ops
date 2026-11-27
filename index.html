@@ -2550,10 +2550,14 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-inc]');if(
 const OSMC={};
 function incOsm(hub){let o=OSMC[hub];if(o)return o.ok?o:(o.err&&Date.now()-o.err>90000?(o.err=0,incOsmFetch(hub),null):null);o=OSMC[hub]={ok:0};
   try{const j=localStorage.getItem('ob-osm3-'+hub);if(j){incOsmBuild(hub,JSON.parse(j));return o.ok?o:null}}catch(e){}incOsmFetch(hub);return null}
-async function incOsmFetch(hub){const A=AP[hub],d=.032,cl=Math.cos(A.lat*Math.PI/180),dl=d/cl,b=[A.lat-d,A.lon-dl,A.lat+d,A.lon+dl].map(v=>v.toFixed(5)).join(','),
-    q='[out:json][timeout:50];(way["aeroway"~"^(taxiway|taxilane|apron|terminal)$"]('+b+');way["building"="terminal"]('+b+');node["aeroway"~"^(parking_position|gate)$"]('+b+');way["aeroway"="parking_position"]('+b+'););out geom qt;';OSMC[hub].busy=1;let why='';
-  for(const ep of['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter']){try{const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),50000);const r=await fetch(ep+'?data='+encodeURIComponent(q),{signal:ac.signal});clearTimeout(tm);if(!r.ok){why='server '+r.status;continue}const j=await r.json();incOsmBuild(hub,j,1);if(!OSMC[hub].ok){OSMC[hub].why='no gate data for this airport in OpenStreetMap';OSMC[hub].err=Date.now()}return}catch(e){why=e&&e.name==='AbortError'?'timed out':(e&&e.message==='Failed to fetch'?'download blocked':String(e&&e.message||e).slice(0,40))}}
-  OSMC[hub].busy=0;OSMC[hub].why=why;OSMC[hub].err=Date.now()}
+async function incOsmFetch(hub){const A=AP[hub],d=.024,cl=Math.cos(A.lat*Math.PI/180),dl=d/cl,b=[A.lat-d,A.lon-dl,A.lat+d,A.lon+dl].map(v=>v.toFixed(5)).join(','),H='[out:json][timeout:40];',
+    Q=[H+'(node["aeroway"~"^(parking_position|gate)$"]('+b+');way["aeroway"="parking_position"]('+b+');way["aeroway"="terminal"]('+b+');way["building"="terminal"]('+b+'););out geom qt;',H+'(way["aeroway"~"^(taxiway|taxilane)$"]('+b+');way["aeroway"="apron"]('+b+'););out geom qt;'];OSMC[hub].busy=1;let why='',els=[];
+  const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+  for(const q of Q){let got=null;
+    for(let rd=0;rd<2&&!got;rd++){if(rd)await new Promise(r=>setTimeout(r,2500));
+      for(const ep of EP){try{const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),30000);const r=await fetch(ep+'?data='+encodeURIComponent(q),{signal:ac.signal});clearTimeout(tm);if(!r.ok){why='server busy ('+r.status+')';continue}const j=await r.json();if(j&&j.elements){got=j.elements;break}why='bad reply'}catch(e){why=e&&e.name==='AbortError'?'timed out':(e&&e.message==='Failed to fetch'?'servers busy or blocked':String(e&&e.message||e).slice(0,40))}}}
+    if(!got){OSMC[hub].busy=0;OSMC[hub].why=why;OSMC[hub].err=Date.now()-60000;return}els=els.concat(got)}
+  incOsmBuild(hub,{elements:els},1);if(!OSMC[hub].ok){OSMC[hub].why='no gate data for this airport in OpenStreetMap';OSMC[hub].err=Date.now()}}
 function incGraph(D){const idx=new Map(),V=[],adj=[],id=p=>{const k=p[0]+','+p[1];let i=idx.get(k);if(i===undefined){i=V.length;idx.set(k,i);V.push(p);adj.push([])}return i};
   D.tw.forEach(w=>{for(let i=1;i<w.length;i++){const a=id(w[i-1]),b=id(w[i]);if(a===b)continue;const d=Math.hypot(V[a][0]-V[b][0],V[a][1]-V[b][1]);adj[a].push([b,d]);adj[b].push([a,d])}});return{V,adj}}
 function incDij(G,src){const n=G.V.length,dist=new Float64Array(n).fill(1e18),pr=new Int32Array(n).fill(-1);dist[src]=0;const h=[[0,src]];
