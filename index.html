@@ -241,7 +241,7 @@ async function lvSide(im,l,code,nat){const w=im.naturalWidth,h=im.naturalHeight,
   let od=null;if(oi){const oc=document.createElement('canvas');oc.width=w;oc.height=h;const og=oc.getContext('2d',{willReadFrequently:true});og.drawImage(oi,0,0);od=og.getImageData(0,0,w,h).data}
   const rs=[];for(let x=xa;x<xb;x+=3)for(let y=Math.round(Tp+.05*D);y<Bt-.05*D;y+=3){const j=(y*w+x)*4;if(A[y*w+x]){const lu=.3*d[j]+.59*d[j+1]+.11*d[j+2];if(lu>110)rs.push(lu)}}
   const ref=rs.length?med(rs):190;
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;if(!A[i]||stab[i])continue;if((skT[x]&&y<Tp+.4*D))continue;const j=i*4,r=d[j],gg=d[j+1],b=d[j+2],lu=.3*r+.59*gg+.11*b,mx=Math.max(r,gg,b),mn=Math.min(r,gg,b);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;if(!A[i]||stab[i])continue;if((skT[x]&&y<Tp+.4*D))continue;if(y>Bt-.07*D&&x>x0+.2*Ln&&x<xf-.02*Ln)continue;if(bot[x]>Bt+.04*D&&y>Bt-.2*D&&x>x0+.2*Ln&&x<xf)continue;const j=i*4,r=d[j],gg=d[j+1],b=d[j+2],lu=.3*r+.59*gg+.11*b,mx=Math.max(r,gg,b),mn=Math.min(r,gg,b);
     if(lu<100||(mx-mn)/(mx||1)>.36)continue;let col=null,al=0;
     if(finZ(x,y)){col=c1;al=1}
     if(od){const oa=od[j+3]/255;if(oa>.02){const oc=[od[j],od[j+1],od[j+2]];if(al){col=[c1[0]+(oc[0]-c1[0])*oa,c1[1]+(oc[1]-c1[1])*oa,c1[2]+(oc[2]-c1[2])*oa]}else{col=oc;al=oa}}}
