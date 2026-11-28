@@ -1176,11 +1176,11 @@ function awyNear(G,p,r){const out=[],c=Math.ceil(r/330)+1,i0=Math.floor(p.lat/3)
 function awyDij(G,src,lim,ok){const D=new Map(),pr=new Map(),h=[];const push=(c,n)=>{h.push([c,n]);let i=h.length-1;while(i>0){const p=(i-1)>>1;if(h[p][0]<=h[i][0])break;[h[p],h[i]]=[h[i],h[p]];i=p}},pop=()=>{const t=h[0],l=h.pop();if(h.length){h[0]=l;let i=0;for(;;){let a=2*i+1,b=a+1,m=i;if(a<h.length&&h[a][0]<h[m][0])m=a;if(b<h.length&&h[b][0]<h[m][0])m=b;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m}}return t};
   for(const [k,d] of src){D.set(k,d);pr.set(k,-1);push(d,k)}
   while(h.length){const [c,n]=pop();if(c>D.get(n))continue;if(c>lim)break;for(const [m,w] of G.adj[n]){if(!ok(m))continue;const nc=c+w;if(nc<(D.has(m)?D.get(m):1e9)){D.set(m,nc);pr.set(m,n);push(nc,m)}}}return{D,pr}}
-function awyPath(o,d,km){if(km<250)return null;const G=awyInit(),lim=km*1.12+120,sl=Math.min(260,km*.3);
-  const so=awyNear(G,o,sl),sd=awyNear(G,d,sl);if(!so.length||!sd.length)return null;
-  const ok=n=>{const p={lat:G.la[n],lon:G.lo[n]};return gcKm(o,p)+gcKm(p,d)<=km*1.1+60};
+function awyPath(o,d,km){if(km<60)return null;const G=awyInit(),lim=km*(km<400?1.4:1.12)+120,sl=Math.max(70,Math.min(260,km*.3)),sh=km<400?1.5:1.1;
+  const nr=(x=>x.sort((p,q)=>p[1]-q[1]).slice(0,3)),so=nr(awyNear(G,o,sl)),sd=nr(awyNear(G,d,sl));if(!so.length||!sd.length)return null;
+  const ok=n=>{const p={lat:G.la[n],lon:G.lo[n]};return gcKm(o,p)+gcKm(p,d)<=km*sh+60};
   const A=awyDij(G,so.filter(x=>ok(x[0])),lim,ok),B=awyDij(G,sd.filter(x=>ok(x[0])),lim,ok);
-  let best=null,bc=km*1.1+40;
+  let best=null,bc=km*(km<400?1.45:1.1)+40;
   for(const [n,c] of A.D){if(B.D.has(n)){const t=c+B.D.get(n);if(t<bc){bc=t;best={u:n,v:n,t}}}}
   const ca=[...A.D].sort((x,y)=>y[1]-x[1]).slice(0,70),cb=[...B.D].sort((x,y)=>y[1]-x[1]).slice(0,70);
   for(const [u,cu] of ca)for(const [v,cv] of cb){const g=gcKm({lat:G.la[u],lon:G.lo[u]},{lat:G.la[v],lon:G.lo[v]});if(g<60||g>3200)continue;if(cu+g+cv>=bc)continue;let pen=1.35;if(g>=300){let hit=0;for(let q=1;q<=6;q++){const m=gcPt({lat:G.la[u],lon:G.lo[u]},{lat:G.la[v],lon:G.lo[v]},q/7);if(awyNear(G,{lat:m[0],lon:m[1]},110).length)hit++}pen=hit>=2?2.2:1}const t=cu+g*pen+cv;if(t<bc){bc=t;best={u,v,t,gap:g}}}
