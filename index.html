@@ -784,8 +784,10 @@ function slotCheck(r,t,skipId){const g=geom(r,t);if(!g)return'No route data';
       if(aiUse(a,h)+used+extra>capOf(a)+1e-9)return'No slot at '+a+' around '+String(h).padStart(2,'0')+':00 (capacity '+capOf(a)+'/h)'}}
   if(r.rt*g.cyc>1440)return'Rotation too long: '+r.rt+' round trips need '+fmtD(r.rt*g.cyc*MIN)+' of a 24 h day';return null}
 /* ---------- settlement ---------- */
-function runLeg(L){const {r,f,t,g,dep,arr,dir}=L;if(!S.fleet.includes(f)||!S.routes.includes(r))return;const rs=r.st||(r.st={rev:0,cost:0,fl:0,pax:0,seats:0,canc:0});const nm=(dir?r.d+'-'+r.o:r.o+'-'+r.d);
-  if(f.mx&&dep<f.mx.until){log(f.reg+' '+nm+' cancelled: in '+mxName(f.mx));rs.canc++;S.stat.canc++;return}
+function runLeg(L){let {r,f,t,g,dep,arr,dir}=L;let rcv=null;if(!S.fleet.includes(f)||!S.routes.includes(r))return;const rs=r.st||(r.st={rev:0,cost:0,fl:0,pax:0,seats:0,canc:0});const nm=(dir?r.d+'-'+r.o:r.o+'-'+r.d);
+  if(f.mx&&dep<f.mx.until){let sp=null;try{sp=mxSpare(L)}catch(x){}
+    if(!sp){log(f.reg+' '+nm+' cancelled: in '+mxName(f.mx)+', no spare aircraft available');rs.canc++;S.stat.canc++;return}
+    rcv={o:f,dly:sp.dly,why:mxName(f.mx)};f=sp.f;t=TY[f.code];g=geom(r,t)||g}
   if(f.mx&&dep>=f.mx.until)f.mx=null;
   try{const ec=evCause(r,dep);if(ec){const pre=S.evPre&&S.evPre[ec.e.id+'|'+r.id];
     if(pre){S.evSeen=S.evSeen||{};const key='pc'+ec.e.id+r.id+dayIdx(dep);if(!S.evSeen[key]){S.evSeen[key]=1;log(r.o+'-'+r.d+' flights cancelled ahead: '+ec.e.nm)}rs.canc++;S.stat.canc++;return}
@@ -794,13 +796,14 @@ function runLeg(L){const {r,f,t,g,dep,arr,dir}=L;if(!S.fleet.includes(f)||!S.rou
   if(k.ground){log(f.reg+' '+nm+' cancelled: grounded, overdue maintenance');rs.canc++;S.stat.canc++;return}
   if(k.over&&rng(hs(L.id+'x'))()<.002+.014*Math.min(1,k.x)**2)return crash(f,r,t,nm,arr);
   const rand=rng(hs(L.id))();const e=econ(r,f,t,dir,rand,dep);try{bkApply(r,e,dep);ffApply(r,e,L.id,dep)}catch(x){}
+  if(rcv){const dc=e.pax*(15+rcv.dly/60*10)*ECO();e.cost+=dc;e.rev*=.97;rs.rec=(rs.rec||0)+1;S.stat.rec=(S.stat.rec||0)+1;(S.rcl=S.rcl||[]).push({t:dep,from:rcv.o.reg,to:f.reg,rt:nm,dly:rcv.dly,why:rcv.why,c:dc});if(S.rcl.length>40)S.rcl.shift();log(f.reg+' operated '+nm+' as recovery for '+rcv.o.reg+' ('+rcv.why+'), delayed '+rcv.dly+' min. Passenger care '+usd(dc))}
   {let cw={};try{cw=crCheck(r,f,t,g.b,L.id,e,L.dep)}catch(x){}if(cw.cancel){log(f.reg+' '+nm+' cancelled: crew shortage');rs.canc++;S.stat.canc++;return}if(cw.extra)e.cost+=cw.extra*ECO()}
   let wd=0;try{const wo=wxOps(dir?r.o:r.d,t,arr,L.id,e.pax);if(wo){const fp=fuelMul(arr),dst=dir?r.o:r.d;let ex=t[7]*(wo.hold/60)*fp;wd=wo.hold;if(wo.div){const bm=(wo.div.km*1.1/t[8])*60+25;ex+=t[7]*(bm/60)*fp+t[5]*.9*10+e.pax*65;wd+=Math.round(60+bm);e.rev*=.9;rs.div=(rs.div||0)+1;S.stat.div=(S.stat.div||0)+1;log(f.reg+' '+nm+' diverted to '+wo.div.code+' ('+(AP[wo.div.code]?AP[wo.div.code].city:'')+'): weather at '+dst+'. Extra cost '+usd(ex));try{newsAdd('wx',f.reg+' diverts to '+wo.div.code+' as weather closes in on '+dst,['One of your flights, '+f.reg+' ('+nm+'), could not land at '+(AP[dst]?AP[dst].city:dst)+' because of '+(WX.ap[dst]&&WX.ap[dst].tx?WX.ap[dst].tx.toLowerCase():'severe weather')+' and diverted to '+wo.div.code+'.','Passengers were looked after and rebooked. The extra fuel, landing fees and passenger care cost about '+usd(ex)+'.'],'The aircraft is out of position, so its next departure is likely to be late.')}catch(x){}}else if(wo.hold>=20)log(f.reg+' '+nm+' held '+wo.hold+' min before landing at '+dst+' (weather)');e.cost+=ex*ECO()}}catch(x){}
   try{const dh0=dir?r.d:r.o;if(S.hubs&&S.hubs.includes(dh0)&&gnStrikeAt(dh0,dep)&&rng(hs('sk'+r.id+dep))()<.4){const c=(f.seats||150)*.7*65/1e6*ECO();LG('Passenger care and refunds').cash-=c;S.repPen=Math.min(.12,(S.repPen||0)+.004);log(f.reg+' '+nm+' cancelled: ground staff strike at '+dh0+'. Passenger care '+money(c));rs.canc++;S.stat.canc++;return}}catch(x){}
   let gd=0;try{const dh=dir?r.d:r.o,hh=S.hubs&&(S.hubs.includes(dh)?dh:S.hubs.includes(dir?r.o:r.d)?(dir?r.o:r.d):'');if(hh){const gx=gnDelay(dh===hh?hh:hh,dep,L.id);if(dh===hh){gd=gx.d;gnNote(hh,gd);if(gd>0)e.cost+=gd*55*ECO();if(gd>=30)log(f.reg+' '+nm+' delayed '+gd+' min by ground handling at '+hh+' ('+GNU[gx.k].n.toLowerCase()+')')}if(gnPeak(hh)<=1)e.cost-=.3*e.cb.turn}}catch(x){}
   let od=0;try{const A=dir?r.d:r.o,B=dir?r.o:r.d,hb=S.hubs||[];if(!hb.includes(A))od=osLeg(A,dep,e,L.id,e.pax,1);if(!hb.includes(B))osLeg(B,dep,e,L.id,e.pax,0);if(od>=15)log(f.reg+' '+nm+' delayed '+od+' min by the handler at '+A+'. SLA credit '+usd(osSt(A).lc||0))}catch(x){}
   let gk=0;try{if(dep-(f.lastArr||0)>4*HRMS)f.carry=0;gk=Math.max(0,Math.round((f.carry||0)-.33*(g.turn||40)));if(gk>0){e.cost+=gk*55*ECO();if(gk>=20)log(f.reg+' '+nm+' departs '+gk+' min late: knock-on from the previous flight')}}catch(x){}
-  const gt=Math.min(120,gd+gk+od);f.carry=Math.max(0,gt-5)+wd;f.lastArr=arr;
+  const gt=Math.min(120,gd+gk+od+(rcv?rcv.dly:0));f.carry=Math.max(0,gt-5)+wd;f.lastArr=arr;
   log(f.reg+' '+nm+' landed '+hhmm(arr)+': '+e.pax+'/'+e.seats+' pax, revenue '+usd(e.rev)+', cost '+usd(e.cost)+', result '+usd(e.rev-e.cost));
   LG('*').cash+=(e.rev-e.cost)/1e6;ledFl(e);rs.rev+=e.rev;rs.cost+=e.cost;rs.fl++;rs.pax+=e.pax;rs.seats+=e.seats;
   S.stat.rev+=e.rev;S.stat.cost+=e.cost;S.stat.fl++;S.stat.pax+=e.pax;S.stat.seats+=e.seats;
@@ -908,7 +911,7 @@ function render0(){
   hud();
   const tabs=[['routes','Routes'],['fleet','Fleet'],['used','Used'],['new','New'],['hubs','Hubs'],['ap','Airports'],['log','Finance'],['more','Tools']];
   const IC={ov:'<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>',map:'<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/>',routes:'<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',fleet:'<path d="M2 16l20-5-20-5 3 5-3 5zM5 11h8"/>',market:'<path d="M4 7h16l-1.5 11h-13zM9 7a3 3 0 016 0"/>',net:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',log:'<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',more:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'};
-  const MORE=['more','tools','hubs','ap','riv','cx','gnd','log','bank','prog','settings'],GR=[['ov','Home',['ov']],['routes','Routes',['routes','book']],['map','Map',['map']],['fleet','Fleet',['fleet','crew','plan','used','new']],['more','More',MORE]];
+  const MORE=['more','tools','hubs','ap','riv','cx','gnd','log','bank','prog','mxt','settings'],GR=[['ov','Home',['ov']],['routes','Routes',['routes','book']],['map','Map',['map']],['fleet','Fleet',['fleet','crew','plan','used','new']],['more','More',MORE]];
   $('#tabs').innerHTML=GR.map(g=>{const on=g[2].includes(tab);return'<button class="ni '+(on?'on':'')+'" data-t="'+g[0]+'"><svg viewBox="0 0 24 24">'+IC[g[0]]+'</svg>'+g[1]+'</button>'}).join('');
   const SG={routes:[['routes','Routes'],['book','Bookings']],fleet:[['fleet','Fleet'],['crew','Crew'],['plan','Planner'],['used','Buy']],net:[['hubs','Hubs'],['cx','Connect'],['ap','Airports'],['riv','Rivals'],['gnd','Ground']],fin:[['log','Overview'],['bank','Bank']]},
     GOF={routes:'routes',book:'routes',fleet:'fleet',crew:'fleet',plan:'fleet',used:'fleet',new:'fleet',hubs:'net',cx:'net',ap:'net',riv:'net',gnd:'net',log:'fin',bank:'fin'},sg=SG[GOF[tab]],act=tab==='new'?'used':tab,
@@ -937,7 +940,7 @@ function render0(){
   else if(tab==='riv')V.innerHTML=rivView();
   else if(tab==='map')V.innerHTML=mapView();
   else if(tab==='hubs')V.innerHTML=hubsView();
-  else if(tab==='ov')V.innerHTML=ovView();else if(tab==='cx')V.innerHTML=cxView();else if(tab==='more')V.innerHTML=morePage();else if(tab==='tools')V.innerHTML=moreView();else if(tab==='book')V.innerHTML=bookView();else if(tab==='plan')V.innerHTML=planView();else if(tab==='gnd')V.innerHTML=gndView();else if(tab==='crew')V.innerHTML=(crewView()||'<div class="empty"><b>No crew needed yet</b><div class="mut">Add a route and your crew pools appear here.</div></div>');else if(tab==='prog')V.innerHTML='<div class="bar"><button data-t="more">Back</button></div>'+progView();
+  else if(tab==='ov')V.innerHTML=ovView();else if(tab==='cx')V.innerHTML=cxView();else if(tab==='more')V.innerHTML=morePage();else if(tab==='tools')V.innerHTML=moreView();else if(tab==='book')V.innerHTML=bookView();else if(tab==='plan')V.innerHTML=planView();else if(tab==='gnd')V.innerHTML=gndView();else if(tab==='crew')V.innerHTML=(crewView()||'<div class="empty"><b>No crew needed yet</b><div class="mut">Add a route and your crew pools appear here.</div></div>');else if(tab==='prog')V.innerHTML='<div class="bar"><button data-t="more">Back</button></div>'+progView();else if(tab==='mxt')V.innerHTML=mxtView();
   else if(tab==='ap')V.innerHTML=airportsView();
   else if(tab==='log')V.innerHTML=financeView();
   else if(tab==='bank')V.innerHTML=bankView();
@@ -997,7 +1000,7 @@ function progDet(x){const n=now(),R=(a,b)=>'<div class="row" style="margin-top:4
       h+=R('Type',mxName(m)+(m.kind==='R'?'':' (planned)'));if(m.why)h+=R('Cause',m.why);else if(m.kind==='R')h+=R('Cause','Technical failure, repaired at base');else if(m.kind==='K')h+=R('Work','Cabin refit, seat and interior work');else if(m.kind!=='R')h+=R('Work',m.kind==='A'?'Routine line check':'Heavy structural and systems check');
       if(st)h+=R('Started',u(st));h+=R('Back in service',u(m.until)+' ('+fmtD(m.until-n)+')');if(pc!=null)h+='<div style="height:6px;border-radius:3px;background:var(--line);margin-top:6px"><div style="height:6px;border-radius:3px;background:var(--acc,#2dd4bf);width:'+pc.toFixed(0)+'%"></div></div>';
       if(m.cost)h+=R('Repair cost',money(m.cost));h+=R('Condition',Math.round(f.cond)+'%');h+=R('Age / hours',Math.round(f.age)+' yrs · '+Math.round(f.fh||0).toLocaleString()+' FH');
-      h+=R('Flights',rs.length?rs.map(r=>r.o+'-'+r.d).join(', ')+' — cancelled until it returns':'No routes assigned');}
+      h+=R('Flights',rs.length?rs.map(r=>r.o+'-'+r.d).join(', ')+' — covered by a spare aircraft (delayed) if one is free, otherwise cancelled':'No routes assigned');}
     else if(x.k==='Research')h+=R('Project',x.t)+R('Ready',u(x.due)+' ('+fmtD(x.due-n)+')');
     else if(x.k==='Airport project')h+=R('Project',x.t)+R('Complete',u(x.due)+' ('+fmtD(x.due-n)+')');
     else h+=R('Due',u(x.due)+' ('+fmtD(x.due-n)+')')}catch(e){h+='<div class="mut">No further details.</div>'}
@@ -1009,7 +1012,7 @@ function ipcUpd(){const e=document.getElementById('ipc');if(!e)return;const L=pr
   e.style.display='block';e.innerHTML='<button data-t="prog" style="display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;margin-top:6px;padding:6px 10px;background:#eef6f5;color:#0f172a;border:1px solid var(--teal);border-radius:10px;font-size:13px"><span><b>'+L.length+' in progress</b> · next: '+a.t+' ('+a.s.toLowerCase()+')</span><span class="cd" data-due="'+a.due+'"></span></button>'}
 function bookView(){let h='';try{h+=bkPage()}catch(x){h+='<div class="mut">Bookings could not load.</div>'}return h}
 function morePage(){const T=(t,n,d)=>'<button data-t="'+t+'" class="card" style="text-align:left;display:block;width:100%;margin:0"><b>'+n+'</b><div class="mut" style="font-size:12px;margin-top:2px">'+d+'</div></button>',G=(n,a)=>'<div class="mut" style="margin:12px 0 6px;font-weight:600">'+n+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+a.join('')+'</div>';
-  return G('Network',[T('hubs','Hubs','Your bases, buy or sell'),T('cx','Connections','Feeder traffic between hubs'),T('ap','Airports','Runways, slots, rights'),T('riv','Rivals','Competing airlines'),T('gnd','Ground ops','Stands, ramp, check-in')])
+  return G('Network',[T('hubs','Hubs','Your bases, buy or sell'),T('cx','Connections','Feeder traffic between hubs'),T('ap','Airports','Runways, slots, rights'),T('riv','Rivals','Competing airlines'),T('gnd','Ground ops','Stands, ramp, check-in'),T('mxt','Maintenance','Checks, repairs, spares')])
    +G('Money',[T('log','Finance','Profit, ledger, forecast'),T('bank','Bank','Loans and deposits')])
    +G('Game',[T('prog','In progress','Orders, training, research'),T('settings','Settings','Theme, music, PIN, tests'),T('tools','Tools and backup','Reference tools and saves')])}
 function moreView(){const L=[['Aircraft catalog','All 95 types with runway grades, ground profiles and maintenance','https://claude.ai/artifact/WKW2tRHmyN3iWDXKoRd7FW'],['Airport database','4,007 airports, runway grades, weight limits and sector check','https://claude.ai/artifact/Hpgr94ve1uKYZRZRVzCKpx'],['Cabin configurator','Layouts and seat counts by type','https://claude.ai/artifact/E2NA9ZVE7hz6VzQ9549zQh'],['Pricing sandbox','Test fares against an AI competitor','https://claude.ai/artifact/NpniLbBzxpDzHXAQZMLT8f'],['Demand explorer','Population-based route demand','https://claude.ai/artifact/8UpK7xbDhgNJDEfwEFqPVM'],['Ground ops sim','Turnaround and crew prototype for MBJ','https://claude.ai/artifact/Jg7sJnnhPouuQEPu4Hqice']];
@@ -1970,6 +1973,29 @@ function mxWarns(){const w=[],pc=(S.mxW||10)/100;S.fleet.forEach(f=>{const t=TY[
   [['A',f.aFH,t[18]],['C',f.cFH,cint(t)]].forEach(([n,rem,int])=>{if(rem<0)w.push([f.reg,n,'rd',k.ground?'is GROUNDED: '+n+'-check overdue':n+'-check overdue: accident risk rising']);else if(rem<int*pc)w.push([f.reg,n,'am',n+'-check due in '+Math.round(rem)+' FH'+(dh>0?' (about '+Math.max(1,Math.round(rem/dh))+' day'+(Math.round(rem/dh)>1?'s':'')+' of flying)':'')])})});return w}
 function mxBanner(){const w=mxWarns();if(!w.length)return'';return '<div class="warn" style="'+(w.some(x=>x[2]==='rd')?'background:#2a1214;border-color:#7a1f24;color:#f3a8a8':'')+'"><b>Maintenance</b>'+w.slice(0,6).map(x=>'<div>'+x[0]+' '+x[3]+'</div>').join('')+'<div style="margin-top:4px">Open the Fleet tab and send the aircraft to a check.</div></div>'}
 document.addEventListener('click',e=>{if(e.target.id==='automx'){S.autoMx=!S.autoMx;save();e.target.textContent=(S.autoMx?'ON (+25%)':'OFF')}});
+
+function mxBusy(x,a,b){const t=TY[x.code];for(const r of S.routes){if(r.reg!==x.reg)continue;const g=geom(r,t);if(!g)continue;for(let d=dayIdx(a)-1;d<=dayIdx(b);d++){if(!opd(r,d))continue;for(let k=0;k<r.rt;k++)for(let dir=0;dir<2;dir++){const s=dayStart(d)+(rdp(r,g,k)+dir*(g.b+g.turn))*MIN,e=s+(g.b+30)*MIN;if(s-30*MIN<b&&e>a)return true}}}return false}
+function mxSpare(L){const {r,f,t,g,dep,arr}=L;if(S.rec===false)return null;let best=null;const need=f.seats||t[3];
+  for(const x of S.fleet){if(x===f)continue;const tx=TY[x.code];if(!tx)continue;if(x.mx&&x.mx.until>dep)continue;if(tx[9]<g.d*1.05)continue;if((x.seats||tx[3])<need*.6)continue;let gr=false;try{gr=mxRisk(x,tx).ground}catch(e){}if(gr)continue;
+    const dly=Math.round(75+rng(hs(L.id+'rc'))()*75);if(mxBusy(x,dep+dly*MIN,arr+dly*MIN))continue;
+    const sc=Math.abs((x.seats||tx[3])-need)+(S.routes.some(q=>q.reg===x.reg)?60:0);if(!best||sc<best.sc)best={f:x,dly,sc}}
+  return best}
+function mxtView(){const n=now(),L=S.fleet.map((f,i)=>({f,i,t:TY[f.code],st:status(f)})),inM=L.filter(x=>x.f.mx&&x.f.mx.until>n),W=mxWarns(),od=W.filter(w=>w[2]==='rd').length,due=W.filter(w=>w[2]==='am').length;
+  const sp=L.filter(x=>!(x.f.mx&&x.f.mx.until>n)&&!x.st.air&&!S.routes.some(q=>q.reg===x.f.reg)).length;
+  let h='<div class="bar"><button data-t="more">Back</button></div><div class="card"><div class="row"><b>Maintenance</b><span class="mut">'+S.fleet.length+' aircraft</span></div>'
+   +'<div class="row" style="margin-top:6px"><span class="mut">In maintenance</span><span>'+inM.length+'</span></div><div class="row" style="margin-top:4px"><span class="mut">Checks due soon</span><span'+(due?' class="am"':'')+'>'+due+'</span></div><div class="row" style="margin-top:4px"><span class="mut">Overdue</span><span'+(od?' class="rd"':'')+'>'+od+'</span></div><div class="row" style="margin-top:4px"><span class="mut">Idle spares</span><span>'+sp+'</span></div>'
+   +'<div class="row" style="margin-top:8px"><span class="mut">Auto-maintenance (checks as they fall due)</span><button id="automx">'+(S.autoMx?'ON (+25%)':'OFF')+'</button></div>'
+   +'<div class="row" style="margin-top:6px"><span class="mut">Recovery aircraft (spare covers a flight, delayed not cancelled)</span><button id="recmx">'+(S.rec===false?'OFF':'ON')+'</button></div></div>';
+  const rank=x=>x.f.mx&&x.f.mx.until>n?0:Math.min(x.f.aFH/x.t[18],x.f.cFH/cint(x.t))+1;
+  L.sort((a,b)=>rank(a)-rank(b)).forEach(x=>{const f=x.f,t=x.t,m=f.mx&&f.mx.until>n?f.mx:null,k=mxRisk(f,t),ra=f.aFH/t[18],rc=f.cFH/cint(t),bar=(v,lab,rem)=>'<div style="margin-top:6px"><div class="row"><span class="mut">'+lab+'-check</span><span class="'+(v<0?'rd':v<(S.mxW||10)/100?'am':'')+'">'+(rem<0?'overdue '+Math.round(-rem)+' FH':Math.round(rem)+' FH left')+'</span></div><div style="height:5px;border-radius:3px;background:var(--line);margin-top:3px"><div style="height:5px;border-radius:3px;background:'+(v<0?'#ef4444':v<(S.mxW||10)/100?'#f59e0b':'#2dd4bf')+';width:'+Math.max(0,Math.min(100,v*100)).toFixed(0)+'%"></div></div></div>',
+      dis=(x.st.air||m)?' disabled':'',chip=m?'<span class="badge cd" data-due="'+m.until+'"></span>':'<span class="mut">'+(k.ground?'Grounded':x.st.air?'Airborne':'Available')+'</span>';
+    h+='<details class="card" style="padding:9px 12px"'+(m?' open':'')+'><summary style="list-style:none;cursor:pointer"><div class="row"><span><b>'+f.reg+' '+t[0]+'</b><div class="mut">'+(m?mxName(m):'Condition '+Math.round(f.cond)+'%')+'</div></span>'+chip+'</div></summary>'
+     +(m?progDet({k:'Maintenance',f,due:m.until}):'')+bar(ra,'A',f.aFH)+bar(rc,'C',f.cFH)
+     +'<div class="row" style="margin-top:8px;gap:6px"><button data-mx="'+x.i+'|A"'+dis+'>A-check '+money(chkCost(t,'A'))+' · 2h</button><button data-mx="'+x.i+'|C"'+dis+'>C-check '+money(chkCost(t,'C'))+' · '+fmtD(chkDur(t,'C'))+'</button></div></details>'});
+  const rl=(S.rcl||[]).slice(-8).reverse();
+  h+='<h3>Recovery flights</h3>'+(rl.length?'<div class="card">'+rl.map(c=>'<div class="row" style="margin-top:4px"><span>'+c.rt+' <span class="mut">'+c.to+' for '+c.from+'</span></span><span class="mut">+'+c.dly+' min</span></div>').join('')+'</div>':'<div class="mut">None yet. When an aircraft is in maintenance, a free aircraft covers its flights with a delay.</div>');
+  return h}
+document.addEventListener('click',e=>{if(e.target.id==='recmx'){S.rec=S.rec===false;save();e.target.textContent=S.rec===false?'OFF':'ON'}});
 
 /* ---------- cabin configuration ---------- */
 const CLS=['Y','PY','J','F'],CN={Y:'Economy',PY:'Premium Economy',J:'Business',F:'First'};
