@@ -501,14 +501,14 @@ const REGP={CAR:{n:'Caribbean',crew:.85,mx:.9,fuel:1.05,cash:1},CAM:{n:'Central 
 const rgp=a=>REGP[AP[a]?wreg(AP[a].cc):'GEN']||REGP.GEN;
 const POS={lcc:{n:'Low-cost',brand:-.18,pxs:14,cat:0,anc:9,crew:.92,ovh:.12,d:'Lowest fares and fast turns. Ancillary fees add about $9 per passenger and sales costs are lower, but business travellers and quality-sensitive passengers pass you by.'},hyb:{n:'Hybrid',brand:0,pxs:20,cat:0,anc:0,crew:1,ovh:.18,d:'The balanced default: a standard product with the usual costs.'},full:{n:'Full-service',brand:.35,pxs:28,cat:6,anc:0,crew:1.05,ovh:.2,d:'Better product, meals and cabins. Business and premium passengers choose you over equal-priced rivals, but each passenger costs more to serve and you must win on frequency, punctuality and routes the budget carriers avoid.'}};
 const PSN=()=>POS[S.pos||'hyb'];
-const CREW={Regional:1300,Narrow:1800,Mid:2100,Wide:3000},MXR={Regional:600,Narrow:900,Mid:1000,Wide:1700},TURNF={Regional:2600,Narrow:2600,Mid:3400,Wide:5600};
+const CREW={Regional:1300,Narrow:1800,Mid:1900,Wide:2200},MXR={Regional:600,Narrow:900,Mid:950,Wide:1250},TURNF={Regional:2600,Narrow:2600,Mid:3200,Wide:4200};
 /* economy speed: flights are real-time, so flight revenue and running costs are scaled up (default x12, about a 2-month payback on a new narrowbody). Lease, slot, upkeep and purchase prices are not scaled. */
 const ECO=()=>S.eco||12;
 function econ(r,f,t,dir,rand,at){const o=dir?r.d:r.o,dd=dir?r.o:r.d,g=geom(r,t);let wA=0;try{if(g)wA=wxLeg(r,t,g,dir,dayStart(dayIdx(at!=null?at:now())))||0}catch(e){}const blk=g?(g.b+wA)/60:0;
   const seats=seatsAt(t,o,g.d,f.seats||t[3]);const pd=pairDemand(r);if(!pd||!seats)return{pax:0,seats,rev:0,cost:0,g};
   const sf=seas(r,at),sl=cSell(r,f,t,g.d,seats,Math.round(pd.perFlight*sf*(0.92+0.16*rand)*(1-(S.repPen||0)))),px0=sl.pax;
   const cx=cxFeed(r,dir);let cp=0,cprev=0,kk=1;if(cx){cp=Math.min(Math.round(cx.pax*(0.9+0.2*rand)),Math.floor(seats*.9));cprev=cp*(cx.rev/cx.pax);const lp=Math.min(px0,seats-cp);kk=px0?lp/px0:0}
-  const pax=Math.round(px0*kk)+cp,rev=sl.rev*kk*(1+.6*(sf-1))+cprev+PSN().anc*pax;
+  const pax=Math.round(px0*kk)+cp,pmx=(t[2]==='Wide'||t[2]==='Mid')?1+(t[2]==='Wide'?.24:.1)*Math.min(1,Math.max(0,(g.d-1500)/2500)):1,rev=sl.rev*kk*(1+.6*(sf-1))*pmx+cprev+PSN().anc*pax;
   const rg=rgp(r.o),ps=PSN(),rgo=rgp(o);const cb={fuel:t[7]*blk*fuelMul(at!=null?at:now())*rgo.fuel,crew:CREW[t[2]]*blk*rg.crew*ps.crew,mxr:MXR[t[2]]*blk*rg.mx,land:land(dd)*t[5],nav:0.5*t[5]*g.d/100,pxs:ps.pxs*pax,cat:sl.cat*kk+ps.cat*pax,turn:TURNF[t[2]]*rg.crew,ovh:rev*ps.ovh};
   const c=cb.fuel+cb.crew+cb.mxr+cb.land+cb.nav+cb.pxs+cb.cat+cb.turn;
   const K=ECO(),sc=o=>{const x={};for(const q in o)x[q]=o[q]*K;return x};
@@ -832,7 +832,7 @@ function completeNext(id){const r=S.routes.find(x=>x.id==id),f=r&&S.fleet.find(x
 function tick(){const n=now();let ch=false,lp=0;const lg=[];
   S.fleet.forEach(f=>{if(f.how!=='lease')return;if(!f.nextDue)f.nextDue=n+per();let k=0;while(f.nextDue<=n&&k++<60){LG('Lease payments').cash-=amtL(f.lease);f.nextDue+=per();ch=true;lp+=amtL(f.lease)}});
   if(lp>0){log('Lease payments '+money(lp));lg.push('Lease paid '+money(lp))}
-  try{if(S.fleet.length){if(!S.ohDue)S.ohDue=n+per();let k=0;while(S.ohDue<=n&&k++<60){const v=S.fleet.reduce((a,f)=>a+value(TY[f.code],f.age,f.cond),0),c=ECO()*(0.03+v*0.0042)*(per()/(7*DAYM));LG('Overheads: staff, insurance, admin').cash-=c;S.ohDue+=per();ch=true;lg.push('Overheads '+money(c))}}else S.ohDue=0}catch(e){}
+  try{if(S.fleet.length){if(!S.ohDue)S.ohDue=n+per();let k=0;while(S.ohDue<=n&&k++<60){const v=S.fleet.reduce((a,f)=>a+value(TY[f.code],f.age,f.cond),0),c=ECO()*(0.03+v*0.0042)*(per()/(7*DAYM));LG('Overheads: staff, insurance, admin').cash-=c;const vo=S.fleet.reduce((q,f)=>q+(f.how==='lease'?0:value(TY[f.code],f.age,f.cond)),0),dp=ECO()*vo*0.0050*(per()/(30*DAYM));if(dp>0){LG('Depreciation and financing (owned aircraft)').cash-=dp;lg.push('Depreciation '+money(dp))}S.ohDue+=per();ch=true;lg.push('Overheads '+money(c))}}else S.ohDue=0}catch(e){}
   if(loanTick(n,lg))ch=true;
   try{if(crTick(n))ch=true}catch(e){}
   try{if(gnTick(n))ch=true}catch(e){}
@@ -1166,12 +1166,17 @@ function rwDir(ap){try{const b=rwyActive(ap.iata,now());return b?b.u:null}catch(
 function pushOut(la,lo,w,L){for(const z of L){const R=z[2],cl=Math.cos(z[0]*RAD),dx=((lo-z[1]+540)%360-180)*111.2*cl,dy=(la-z[0])*111.2,dist=Math.hypot(dx,dy);if(dist>=R)continue;const k=dist<1e-3?[0,1]:[dx/dist,dy/dist],tx=dx+(k[0]*R-dx)*w,ty=dy+(k[1]*R-dy)*w;lo=z[1]+tx/(111.2*cl);la=z[0]+ty/111.2}return[la,lo]}
 const RTC=new Map();
 function rwEnds(ap,role){try{const k=ap.iata,b=rwyActive(k,now());if(!b)return null;let r=b.r,sg=b.sg,u=b.u;if(role==='dep'){const M=rwyMembersOf(k,{i:b.i,sg:b.sg});if(M.dep&&M.dep[0]){r=M.dep[0].r;sg=M.dep[0].sg;u=M.dep[0].u}}const far=sg>0?[r[2],r[3]]:[r[0],r[1]],thr=sg>0?[r[0],r[1]]:[r[2],r[3]];return{u,dep:far,arr:[thr[0]+u[0]*350,thr[1]+u[1]*350]}}catch(e){return null}}
+const WPT=[[41,-60],[50,-50],[53,-40],[52,-30],[51,-20],[50,-8],[45,-55],[47,-45],[48,-35],[46,-25],[43,-65],[40.5,-70],[39,-74],[35.5,-75],[31,-77],[27,-78.5],[25.5,-76],[23,-75],[20,-73.5],[18,-77],[22,-81],[26,-85],[29,-88],[33,-84],[36,-90],[39,-95],[40,-104],[39,-113],[40,-120],[36,-122],[55,-125],[50,-140],[47,-160],[42,-175],[40,165],[41,150],[36,140],[16,-62],[14,-60],[12,-68],[10,-75],[8,-80],[-5,-35],[-15,-40],[-23,-43],[38,-27],[39,-9],[43,-1.5],[49,2],[51,6],[48,12],[45,20],[40,30],[34,45],[28,55],[25,65],[20,75],[5,100]];
+function airCorr(o,d,km){const T=km;if(T<700)return null;const sel=[];for(const w of WPT){const q={lat:w[0],lon:w[1]},a=gcKm(o,q),b=gcKm(q,d);if(a<120||b<120)continue;if(a+b>T*1.045)continue;sel.push({w,a,t:a/(a+b)})}
+  if(!sel.length)return null;sel.sort((x,y)=>x.a-y.a);const out=[];let last=-1e9;const gap=Math.max(350,T/5);for(const c of sel){if(c.a-last>=gap&&out.length<4){out.push(c);last=c.a}}
+  return out.length?out.map(c=>c.w):null}
 function routeBuild(o,d){const km=gcKm(o,d);if(km<25)return null;
   const ST=evAct().map(e=>[e.lat,e.lon,Math.min(e.r2||e.r1*2,e.r1*1.5+40)]),zones=NOFLY.concat(ST).filter(z=>gcKm(o,{lat:z[0],lon:z[1]})>z[2]+30&&gcKm(d,{lat:z[0],lon:z[1]})>z[2]+30),N=Math.max(10,Math.min(60,Math.round(km/70))),sg=o.iata<d.iata?1:-1;
   let h=0;const hk=o.iata<d.iata?o.iata+d.iata:d.iata+o.iata;for(let i=0;i<hk.length;i++)h=(h*31+hk.charCodeAt(i))>>>0;const bulge=km<500?0:Math.min(70,km*.018)*(((h%1000)/1000)*2-1)*sg;
   const fd=Math.min(.3,60/km),fa=Math.min(.3,60/km),M=[];
+  const CW=airCorr(o,d,km);let cq=null;if(CW){const pts=[[o.lat,o.lon]].concat(CW,[[d.lat,d.lon]]),cu=[0];for(let i=1;i<pts.length;i++)cu.push(cu[i-1]+gcKm({lat:pts[i-1][0],lon:pts[i-1][1]},{lat:pts[i][0],lon:pts[i][1]}));cq=f=>{const t=f*cu[cu.length-1];let j=1;while(j<cu.length-1&&cu[j]<t)j++;const u=(t-cu[j-1])/((cu[j]-cu[j-1])||1);let dl=pts[j][1]-pts[j-1][1];dl=((dl+540)%360)-180;return[pts[j-1][0]+(pts[j][0]-pts[j-1][0])*u,pts[j-1][1]+dl*u]}}
   for(let i=0;i<=N;i++){const f=i/N;if(f<fd||f>1-fa)continue;let p=gcPt(o,d,f);const q=gcPt(o,d,Math.min(1,f+.01)),cl=Math.cos(p[0]*RAD),tx=((q[1]-p[1]+540)%360-180)*cl,ty=q[0]-p[0],tl=Math.hypot(tx,ty)||1,off=bulge*Math.sin(Math.PI*f);
-    p=llOff(p,-ty/tl*off,tx/tl*off);const w=Math.min(1,Math.min(f,1-f)/.12);p=pushOut(p[0],p[1],w,zones);M.push(p)}
+    p=llOff(p,-ty/tl*off,tx/tl*off);if(cq){const z=cq(f);let dl=z[1]-p[1];dl=((dl+540)%360)-180;p=[p[0]*.3+z[0]*.7,p[1]+dl*.7]}const w=Math.min(1,Math.min(f,1-f)/.12);p=pushOut(p[0],p[1],w,zones);M.push(p)}
   const A=[o.lat,o.lon],B=[d.lat,d.lon],p1=gcPt(o,d,.03),p2=gcPt(o,d,.97),cA=Math.cos(o.lat*RAD),cB=Math.cos(d.lat*RAD);
   const eo=rwEnds(o,'dep'),ed=rwEnds(d,'arr'),ld=Math.min(1,km/160),dd=eo&&eo.u,da=ed&&ed.u,A0=eo?llOff(A,eo.dep[0]/1000,eo.dep[1]/1000):A,B0=ed?llOff(B,ed.arr[0]/1000,ed.arr[1]/1000):B;
   let P=[A0];if(dd){P.push(llOff(A0,dd[0]*14*ld,dd[1]*14*ld),llOff(A0,dd[0]*34*ld,dd[1]*34*ld))}
