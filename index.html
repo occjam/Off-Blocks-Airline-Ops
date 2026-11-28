@@ -809,8 +809,8 @@ function runLeg(L){const {r,f,t,g,dep,arr,dir}=L;if(!S.fleet.includes(f)||!S.rou
   const hrs=g.b/60;f.fh+=hrs;f.cyc++;f.aFH-=hrs;f.cFH-=hrs;f.cond=Math.max(30,f.cond-0.01);
   if(fail){const sv=fr/fp,u=rng(hs(L.id+'u'))();
     if(sv<.7){const c=t[13]*(.0002+.0003*u);LG('Unscheduled repairs').cash-=c;log(f.reg+' '+nm+': minor technical snag, delay and repair '+money(c))}
-    else if(sv<.92){const d=(1+3*u)*HRMS,c=t[13]*(.002+.004*u);LG('Unscheduled repairs').cash-=c;f.cond=Math.max(30,f.cond-1);f.mx={kind:'R',until:arr+d};const m=f.reg+' failure on '+nm+': unscheduled repair for '+fmtD(d)+', cost '+money(c);log(m);MXQ.push(m)}
-    else{const d=(4+8*u)*HRMS,c=t[13]*(.01+.02*u);LG('Unscheduled repairs').cash-=c;f.cond=Math.max(30,f.cond-3);f.mx={kind:'R',until:arr+d};const m=f.reg+' major failure on '+nm+' (engine or system): out for '+fmtD(d)+', cost '+money(c);log(m);MXQ.push(m)}}
+    else if(sv<.92){const d=(1+3*u)*HRMS,c=t[13]*(.002+.004*u);LG('Unscheduled repairs').cash-=c;f.cond=Math.max(30,f.cond-1);f.mx={kind:'R',until:arr+d,from:arr,cost:c,why:'Technical failure on '+nm+' (minor system fault)'};const m=f.reg+' failure on '+nm+': unscheduled repair for '+fmtD(d)+', cost '+money(c);log(m);MXQ.push(m)}
+    else{const d=(4+8*u)*HRMS,c=t[13]*(.01+.02*u);LG('Unscheduled repairs').cash-=c;f.cond=Math.max(30,f.cond-3);f.mx={kind:'R',until:arr+d,from:arr,cost:c,why:'Major failure on '+nm+' (engine or system)'};const m=f.reg+' major failure on '+nm+' (engine or system): out for '+fmtD(d)+', cost '+money(c);log(m);MXQ.push(m)}}
   if(S.autoMx&&!f.mx&&(f.cFH<=0||f.aFH<=0))beginCheck(f,t,f.cFH<=0?'C':'A',arr,1.25)}
 function settle(n){const from=Math.max(S.sim,n-14*DAY);const legs=[];
   S.routes.forEach(r=>{const f=S.fleet.find(x=>x.reg===r.reg);if(!f)return;const t=TY[f.code],g=geom(r,t);if(!g)return;
@@ -988,13 +988,23 @@ function ovView(){const n=now();let rev=0,cost=0,rts=0;
   return h}
 function progItems(){const n=now(),L=[];
   S.orders.forEach(o=>{if(o.due>n)L.push({k:'Delivery',t:o.n+' x '+TY[o.code][1],s:'On order',due:o.due,oi:S.orders.indexOf(o)})});
-  S.fleet.forEach(f=>{if(f.mx&&f.mx.until>n)L.push({k:'Maintenance',t:f.reg+' '+TY[f.code][0],s:mxName(f.mx),due:f.mx.until})});
+  S.fleet.forEach(f=>{if(f.mx&&f.mx.until>n)L.push({k:'Maintenance',t:f.reg+' '+TY[f.code][0],s:mxName(f.mx),due:f.mx.until,f:f})});
   Object.keys(S.research||{}).forEach(k=>{const r=S.research[k];if(!r.done&&r.due>n)L.push({k:'Research',t:k.replace('|',' - '),s:'Market research',due:r.due})});
   Object.keys(S.apx||{}).forEach(a=>{const p=S.apx[a].proj;if(p&&p.due>n)L.push({k:'Airport project',t:a+' '+p.name,s:'Under construction',due:p.due})});
   return L.sort((a,b)=>a.due-b.due)}
+function progDet(x){const n=now(),R=(a,b)=>'<div class="row" style="margin-top:4px"><span class="mut">'+a+'</span><span>'+b+'</span></div>',u=v=>new Date(v).toISOString().slice(11,16)+' UTC';let h='<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:4px">';
+  try{if(x.k==='Maintenance'&&x.f){const f=x.f,m=f.mx,t=TY[f.code],rs=S.routes.filter(r=>r.reg===f.reg),st=m.from||null,pc=st?Math.max(0,Math.min(100,(n-st)/Math.max(1,m.until-st)*100)):null;
+      h+=R('Type',mxName(m)+(m.kind==='R'?'':' (planned)'));if(m.why)h+=R('Cause',m.why);else if(m.kind==='R')h+=R('Cause','Technical failure, repaired at base');else if(m.kind==='K')h+=R('Work','Cabin refit, seat and interior work');else if(m.kind!=='R')h+=R('Work',m.kind==='A'?'Routine line check':'Heavy structural and systems check');
+      if(st)h+=R('Started',u(st));h+=R('Back in service',u(m.until)+' ('+fmtD(m.until-n)+')');if(pc!=null)h+='<div style="height:6px;border-radius:3px;background:var(--line);margin-top:6px"><div style="height:6px;border-radius:3px;background:var(--acc,#2dd4bf);width:'+pc.toFixed(0)+'%"></div></div>';
+      if(m.cost)h+=R('Repair cost',money(m.cost));h+=R('Condition',Math.round(f.cond)+'%');h+=R('Age / hours',Math.round(f.age)+' yrs · '+Math.round(f.fh||0).toLocaleString()+' FH');
+      h+=R('Flights',rs.length?rs.map(r=>r.o+'-'+r.d).join(', ')+' — cancelled until it returns':'No routes assigned');}
+    else if(x.k==='Research')h+=R('Project',x.t)+R('Ready',u(x.due)+' ('+fmtD(x.due-n)+')');
+    else if(x.k==='Airport project')h+=R('Project',x.t)+R('Complete',u(x.due)+' ('+fmtD(x.due-n)+')');
+    else h+=R('Due',u(x.due)+' ('+fmtD(x.due-n)+')')}catch(e){h+='<div class="mut">No further details.</div>'}
+  return h+'</div>'}
 function progView(){const L=progItems();if(!L.length)return'<div class="card"><b>Nothing in progress</b><div class="mut">Aircraft orders, maintenance checks, market research and airport projects show here with their time remaining.</div></div>';
   const G={};L.forEach(x=>(G[x.k]=G[x.k]||[]).push(x));
-  return '<div class="mut" style="margin-bottom:6px">'+L.length+' item'+(L.length>1?'s':'')+' in progress. Soonest first.</div>'+Object.keys(G).map(k=>'<h3>'+k+' ('+G[k].length+')</h3>'+G[k].map(x=>x.oi!=null&&typeof ordCard==='function'?ordCard(x.oi):'<div class="card" style="padding:9px 12px"><div class="row"><span><b>'+x.t+'</b><div class="mut">'+x.s+'</div></span><span class="badge cd" data-due="'+x.due+'"></span></div></div>').join('')).join('')}
+  return '<div class="mut" style="margin-bottom:6px">'+L.length+' item'+(L.length>1?'s':'')+' in progress. Soonest first.</div>'+Object.keys(G).map(k=>'<h3>'+k+' ('+G[k].length+')</h3>'+G[k].map(x=>x.oi!=null&&typeof ordCard==='function'?ordCard(x.oi):'<details class="card" style="padding:9px 12px"><summary style="list-style:none;cursor:pointer"><div class="row"><span><b>'+x.t+'</b><div class="mut">'+x.s+' · tap for details</div></span><span class="badge cd" data-due="'+x.due+'"></span></div></summary>'+progDet(x)+'</details>').join('')).join('')}
 function ipcUpd(){const e=document.getElementById('ipc');if(!e)return;const L=progItems();if(!L.length){e.style.display='none';return}const a=L[0];
   e.style.display='block';e.innerHTML='<button data-t="prog" style="display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;margin-top:6px;padding:6px 10px;background:#eef6f5;color:#0f172a;border:1px solid var(--teal);border-radius:10px;font-size:13px"><span><b>'+L.length+' in progress</b> · next: '+a.t+' ('+a.s.toLowerCase()+')</span><span class="cd" data-due="'+a.due+'"></span></button>'}
 function bookView(){let h='';try{h+=bkPage()}catch(x){h+='<div class="mut">Bookings could not load.</div>'}return h}
@@ -1946,7 +1956,7 @@ const chkCost=(t,k)=>k==='A'?Math.max(.03,t[13]*.004):Math.max(.3,t[13]*.03);
 const chkDur=(t,k)=>k==='A'?2*HRMS:t[19]*6*MIN;
 function mxRisk(f,t){const oa=Math.max(0,-f.aFH),oc=Math.max(0,-f.cFH),x=Math.max(oa/aLim(t),oc/cLim(t));return{x:Math.min(1.5,x),over:oa>0||oc>0,ground:oa>=aLim(t)||oc>=cLim(t)}}
 const mxCls=(rem,int)=>rem<0?'rd':rem<int*.1?'am':'ok';
-function beginCheck(f,t,k,at,mult){f.mx={kind:k,until:at+chkDur(t,k)};f.aFH=t[18];if(k==='C'){f.cFH=cint(t);f.cond=Math.min(98,f.cond+15)}else f.cond=Math.min(98,f.cond+4);
+function beginCheck(f,t,k,at,mult){f.mx={kind:k,until:at+chkDur(t,k),from:at,cost:chkCost(t,k)*mult};f.aFH=t[18];if(k==='C'){f.cFH=cint(t);f.cond=Math.min(98,f.cond+15)}else f.cond=Math.min(98,f.cond+4);
   const c=chkCost(t,k)*mult;LG('Scheduled maintenance').cash-=c;log(f.reg+' in '+k+'-check for '+fmtD(chkDur(t,k))+', cost '+money(c))}
 function startCheck(i,k){const f=S.fleet[i];if(!f)return;const t=TY[f.code];if(status(f).air)return toast('Wait until it lands',1);if(f.mx&&now()<f.mx.until)return toast('Already in maintenance',1);
   const c=chkCost(t,k);if(S.cash<c)return toast('Needs '+money(c),1);beginCheck(f,t,k,now(),1);save();toast(f.reg+' in '+k+'-check, back in '+fmtD(chkDur(t,k)));render()}
@@ -2019,7 +2029,7 @@ function cabApply(){const q=cabCalc(),C=CAB;if(!q.ok)return;
   const f=q.f;if(!f||status(f).air||(f.mx&&now()<f.mx.until)){CAB=null;drawCab();return}
   if(S.cash<q.total)return toast('Needs '+money(q.total),1);
   LG('Cabin refits').cash-=q.total;if(q.lease){if(f.retBase==null)f.retBase=f.retFee||amtL(f.lease)*(S.bill==='week'?4:1);f.retFee=f.retBase+cCost(q.t,C.c,cDef(q.t)).cost}
-  f.cfg={...C.c};f.seats=cTot(C.c);if(q.k.days)f.mx={kind:'K',until:now()+q.k.days*6*MIN};
+  f.cfg={...C.c};f.seats=cTot(C.c);if(q.k.days)f.mx={kind:'K',until:now()+q.k.days*6*MIN,from:now()};
   log(f.reg+' cabin refitted to '+cTxt(f.cfg)+', cost '+money(q.total)+', out of service '+fmtD(q.k.days*6*MIN));CAB=null;drawCab();save();toast(f.reg+' refit: '+cTxt(f.cfg));render()}
 document.addEventListener('click',e=>{if(!CAB)return;const el=$('#cab'),b=e.target.closest('button');if(e.target===el){CAB=null;drawCab();return}if(!b||!el||!el.contains(b))return;
   const q=cabCalc(),C=CAB;
