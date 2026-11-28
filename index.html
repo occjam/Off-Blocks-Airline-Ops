@@ -1199,8 +1199,16 @@ function routeBuild(o,d){const km=gcKm(o,d);if(km<25)return null;
     p=llOff(p,-ty/tl*off,tx/tl*off);if(cq){const z=cq(f);let dl=z[1]-p[1];dl=((dl+540)%360)-180;const W=AP_?.92:.7;p=[p[0]*(1-W)+z[0]*W,p[1]+dl*W]}const w=Math.min(1,Math.min(f,1-f)/.12);p=pushOut(p[0],p[1],w,zones);M.push(p)}
   const A=[o.lat,o.lon],B=[d.lat,d.lon],p1=gcPt(o,d,.03),p2=gcPt(o,d,.97),cA=Math.cos(o.lat*RAD),cB=Math.cos(d.lat*RAD);
   const eo=rwEnds(o,'dep'),ed=rwEnds(d,'arr'),ld=Math.min(1,km/160),dd=eo&&eo.u,da=ed&&ed.u,A0=eo?llOff(A,eo.dep[0]/1000,eo.dep[1]/1000):A,B0=ed?llOff(B,ed.arr[0]/1000,ed.arr[1]/1000):B;
-  let P=[A0];if(dd){P.push(llOff(A0,dd[0]*14*ld,dd[1]*14*ld),llOff(A0,dd[0]*34*ld,dd[1]*34*ld))}
-  P=P.concat(M);if(da){P.push(llOff(B0,-da[0]*34*ld,-da[1]*34*ld),llOff(B0,-da[0]*14*ld,-da[1]*14*ld))}P.push(B0);
+  if(AP_){const M2=AP_.slice(1,-1).filter(p=>gcKm(o,{lat:p[0],lon:p[1]})>38&&gcKm(d,{lat:p[0],lon:p[1]})>38).map(p=>pushOut(p[0],p[1],1,zones));if(M2.length)M.splice(0,M.length,...M2)}
+  const rel=(p,r)=>{let dl=p[1]-r[1];dl=((dl+540)%360)-180;return[dl*Math.cos(r[0]*RAD)*111.2,(p[0]-r[0])*111.2]},nz=v=>{const l=Math.hypot(v[0],v[1])||1;return[v[0]/l,v[1]/l]};
+  let P=[A0];
+  if(dd){P.push(llOff(A0,dd[0]*9*ld,dd[1]*9*ld),llOff(A0,dd[0]*19*ld,dd[1]*19*ld));const f1=M.length?M[0]:B0,rv=nz(rel(f1,A0)),cs=dd[0]*rv[1]-dd[1]*rv[0],dt=dd[0]*rv[0]+dd[1]*rv[1];
+    if(dt<.6){const sg2=cs>=0?1:-1,pe=[-dd[1]*sg2,dd[0]*sg2],k2=Math.min(1,(1-dt)*.7+.3);P.push(llOff(A0,dd[0]*30*ld+pe[0]*11*ld*k2,dd[1]*30*ld+pe[1]*11*ld*k2))}}
+  P=P.concat(M);
+  if(da){const lastp=M.length?M[M.length-1]:A0,F34=llOff(B0,-da[0]*34*ld,-da[1]*34*ld),rv=nz(rel(B0,lastp)),dt=da[0]*rv[0]+da[1]*rv[1];
+    if(dt<.75){const r3=rel(lastp,F34),cs=da[0]*r3[1]-da[1]*r3[0],sg2=cs>=0?1:-1,pe=[-da[1]*sg2,da[0]*sg2],k2=Math.min(1,(1-dt)*.6+.3);P.push(llOff(B0,-da[0]*52*ld+pe[0]*16*ld*k2,-da[1]*52*ld+pe[1]*16*ld*k2))}
+    P.push(F34,llOff(B0,-da[0]*14*ld,-da[1]*14*ld))}
+  P.push(B0);
   for(let i=1;i<P.length;i++){let dl=P[i][1]-P[i-1][1];while(dl>180){P[i]=[P[i][0],P[i][1]-360];dl-=360}while(dl<-180){P[i]=[P[i][0],P[i][1]+360];dl+=360}}
   for(let it=0;it<2;it++){const Q=[P[0]];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1];Q.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75])}Q.push(P[P.length-1]);P=Q}
   const cum=[0];for(let i=1;i<P.length;i++){const cl=Math.cos((P[i][0]+P[i-1][0])/2*RAD);cum.push(cum[i-1]+Math.hypot((P[i][1]-P[i-1][1])*cl,P[i][0]-P[i-1][0])*111.2)}
